@@ -8,6 +8,7 @@ require (
 	github.com/nbutton23/zxcvbn-go v0.0.0-20180912185939-ae427f1e4c1d
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.3
+	github.com/securego/gosec v0.0.0-20200401082031-e946c8c39989
 	github.com/stretchr/testify v1.4.0 // indirect
 	golang.org/x/tools v0.0.0-20201102043006-b53d4cbd60a6
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect

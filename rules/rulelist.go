@@ -14,7 +14,10 @@
 
 package rules
 
-import "github.com/securego/gosec/v2"
+import (
+	"github.com/securego/gosec/v2"
+	"github.com/securego/gosec/v2/rules/sdk"
+)
 
 // RuleDefinition contains the description of a rule and a mechanism to
 // create it.
@@ -99,6 +102,11 @@ func Generate(filters ...RuleFilter) RuleList {
 
 		// memory safety
 		{"G601", "Implicit memory aliasing in RangeStmt", NewImplicitAliasing},
+
+		// CosmosSDK Modules
+		{"G701", "Casting integers", sdk.NewIntegerCast},
+		{"G702", "Import blocklist for SDK modules", sdk.NewUnsafeImport},
+		{"G703", "Errors that don't result in rollback", sdk.NewErrorNotPropagated},
 	}
 
 	ruleMap := make(map[string]RuleDefinition)
