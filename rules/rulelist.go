@@ -107,6 +107,7 @@ func Generate(filters ...RuleFilter) RuleList {
 		{"G701", "Casting integers", sdk.NewIntegerCast},
 		{"G702", "Import blocklist for SDK modules", sdk.NewUnsafeImport},
 		{"G703", "Errors that don't result in rollback", sdk.NewErrorNotPropagated},
+		{"G704", "Strconv invalid bitSize and cast", sdk.NewStrconvIntBitSizeOverflow},
 	}
 
 	ruleMap := make(map[string]RuleDefinition)
