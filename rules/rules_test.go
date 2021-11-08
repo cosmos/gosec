@@ -87,6 +87,10 @@ var _ = Describe("gosec rules", func() {
 			runner("G109", testutils.SampleCodeG109)
 		})
 
+		It("should detect strconv bitsize mismatch", func() {
+			runner("G704", testutils.SampleCodeStrconvBitsize)
+		})
+
 		It("should detect DoS vulnerability via decompression bomb", func() {
 			runner("G110", testutils.SampleCodeG110)
 		})

@@ -2313,4 +2313,90 @@ func main() {
         C.printData(cData)
 }
 `}, 0, gosec.NewConfig()}}
+
+	// SampleCodeStrconvBitsize - Potential Integer OverFlow
+	SampleCodeStrconvBitsize = []CodeSample{
+		{[]string{`
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	u64, err := strconv.ParseUint("2147483648", 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	value := int64(u64)
+	fmt.Println(value)
+}`}, 1, gosec.NewConfig()}, {[]string{`
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	u16, err := strconv.ParseUint("32768", 10, 16)
+	if err != nil {
+		panic(err)
+	}
+	if int16(u16) < 0 {
+		fmt.Println(bigValue)
+	}
+}`}, 1, gosec.NewConfig()}, {[]string{`
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	bigValue, err := strconv.ParseUint("2147483648", 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(bigValue)
+}`}, 0, gosec.NewConfig()}, {[]string{`
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	bigValue, err := strconv.Atoi("2147483648", 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(bigValue)
+	test()
+}
+
+func test() {
+	bigValue := 30
+	value := int32(bigValue)
+	fmt.Println(value)
+}`}, 0, gosec.NewConfig()}, {[]string{`
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	value := 10
+	if value == 10 {
+		value, _ := strconv.ParseUint("2147483648", 10, 64)
+		fmt.Println(value)
+	}
+	v := int32(value)
+	fmt.Println(v)
+}`}, 0, gosec.NewConfig()}}
 )
