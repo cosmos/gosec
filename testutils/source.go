@@ -2399,4 +2399,61 @@ func main() {
 	v := int32(value)
 	fmt.Println(v)
 }`}, 0, gosec.NewConfig()}}
+
+	// SampleCodeMapRangingNonDeterministic - Detect potential non-determinism
+	SampleCodeMapRangingNonDeterministic = []CodeSample{
+		{
+			[]string{`
+package main
+
+func main() {
+	m := map[string]int{
+		"a": 0,
+		"b": 1,
+		"c": 2,
+		"d": 3,
+	}
+
+	makeMap := func() map[string]string { return nil }
+
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	values := make([]int, 0, len(m))
+	for _, value := range m {
+		values = append(values, value)
+	}
+
+	type kv struct {
+		k, v interface{}
+	}
+	kvL := make([]*kv, 0, len(m))
+	for k, v := range m {
+		kvL = append(kvL, &kv{k, v})
+	}
+
+	for k := range m {
+		delete(m, k)
+	}
+
+	for k := range makeMap() {
+		delete(m, k)
+	}
+
+	for k := range do() {
+		delete(m, k)
+	}
+
+	for k, v := range do() {
+                println(v)
+		delete(m, k)
+	}
+}
+
+func do() map[string]string { return nil }
+`}, 3, gosec.NewConfig(),
+		},
+	}
 )
