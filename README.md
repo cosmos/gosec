@@ -1,5 +1,9 @@
 
-# gosec - Golang Security Checker
+# gosec - Golang Security Checker for the CosmosSDK
+
+This is a fork of the popular `gosec` tool with some new rules targetting the Cosmos-SDK.
+
+See the [docs](/rules/sdk) for the Cosmos-SDK specific rules.
 
 Inspects source code for security problems by scanning the Go AST.
 
