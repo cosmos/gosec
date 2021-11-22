@@ -117,6 +117,7 @@ func Generate(filters ...RuleFilter) RuleList {
 		{"G703", "Errors that don't result in rollback", sdk.NewErrorNotPropagated},
 		{"G704", "Strconv invalid bitSize and cast", sdk.NewStrconvIntBitSizeOverflow},
 		{"G705", "Iterating over maps undeterministically", sdk.NewMapRangingCheck},
+		{"G706", "Use of time.Now() in consensus code could lead to chain halt", sdk.NewTimeNowRefusal},
 	}
 
 	ruleMap := make(map[string]RuleDefinition)

@@ -95,6 +95,10 @@ var _ = Describe("gosec rules", func() {
 			runner("G705", testutils.SampleCodeMapRangingNonDeterministic)
 		})
 
+		It("should detect use of time.Now() in consensus code which could lead to chain halt", func() {
+			runner("G706", testutils.SampleCodeTimeNowNonConsensusAware)
+		})
+
 		It("should detect DoS vulnerability via decompression bomb", func() {
 			runner("G110", testutils.SampleCodeG110)
 		})
