@@ -137,6 +137,8 @@ func (bc *bitsizeOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec
 	return nil, nil
 }
 
+// NewStrconvIntBitSizeOverflow returns an error if a constant bitSize is used
+// for a cast signed value that was retrieved from strconv.ParseUint.
 func NewStrconvIntBitSizeOverflow(id string, config gosec.Config) (rule gosec.Rule, nodes []ast.Node) {
 	calls := gosec.NewCallList()
 	calls.Add("strconv", "ParseUint")
