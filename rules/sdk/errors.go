@@ -78,7 +78,7 @@ func (r *noErrorCheck) Match(n ast.Node, ctx *gosec.Context) (*gosec.Issue, erro
 	return nil, nil
 }
 
-// NewNoErrorCheck detects if a returned error is not propagated up the stack.
+// NewErrorNotPropagated detects if a returned error is not propagated up the stack.
 func NewErrorNotPropagated(id string, conf gosec.Config) (gosec.Rule, []ast.Node) {
 
 	return &noErrorCheck{

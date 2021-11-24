@@ -5,7 +5,6 @@ IMAGE_REPO = securego
 BUILDFLAGS := '-w -s'
 CGO_ENABLED = 0
 GO := GO111MODULE=on go
-GO_NOMOD :=GO111MODULE=off go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOBIN ?= $(GOPATH)/bin
 GOLINT ?= $(GOBIN)/golint
@@ -17,9 +16,9 @@ default:
 	$(MAKE) build
 
 install-test-deps:
-	$(GO_NOMOD) get -u github.com/onsi/ginkgo/ginkgo
-	$(GO_NOMOD) get -u golang.org/x/crypto/ssh
-	$(GO_NOMOD) get -u github.com/lib/pq
+	go get -u github.com/onsi/ginkgo/ginkgo
+	go get -u golang.org/x/crypto/ssh
+	go get -u github.com/lib/pq
 
 test: install-test-deps build fmt lint sec
 	$(GINKGO) -r -v
@@ -31,7 +30,7 @@ fmt:
 
 lint:
 	@echo "LINTING"
-	$(GO_NOMOD) get -u golang.org/x/lint/golint
+	go get -u golang.org/x/lint/golint
 	$(GOLINT) -set_exit_status ./...
 	@echo "VETTING"
 	$(GO) vet ./...

@@ -58,7 +58,7 @@ func NewBlocklistedImports(id string, conf gosec.Config, blocklist map[string]st
 	}, []ast.Node{(*ast.ImportSpec)(nil)}
 }
 
-// NewBlocklistedImportMD5 fails if MD5 is imported
+// NewUnsafeImport fails if any of "unsafe", "reflect", "crypto/rand", "math/rand" are imported.
 func NewUnsafeImport(id string, conf gosec.Config) (gosec.Rule, []ast.Node) {
 	return NewBlocklistedImports(id, conf, map[string]string{
 		// unsafe exposes memory bugs
