@@ -47,30 +47,35 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 
 	switch n := node.(type) {
 	case *ast.CallExpr:
-		if fun, ok := n.Fun.(*ast.Ident); ok {
-			// Detect intX(y) and uintX(y) for any X, where y is not an int literal.
-			if strings.HasPrefix(fun.Name, "int") || strings.HasPrefix(fun.Name, "uint") {
-
-				// n.Args[0] is of type ast.Expr. It's the arg to the type conversion.
-				// If the expression string is a constant integer, then ignore.
-				// TODO: check that the constant will actually fit and wont overflow?
-				arg := n.Args[0]
-				exprString := types.ExprString(arg)
-				intLiteral, err := strconv.Atoi(exprString)
-				if err == nil {
-					// TODO: probably use ParseInt and check if it fits in the target.
-					_ = intLiteral
-					return nil, nil
-				}
-
-				// TODO: run the go type checker to determine the
-				// type of arg so we can check if the type
-				// conversion is reducing the bit-size and could overflow.
-				// If not, this will be a false positive for now ...
-				// See https://golang.org/pkg/go/types/#Config.Check
-				return gosec.NewIssue(ctx, n, i.ID(), i.What, i.Severity, i.Confidence), nil
-			}
+		fun, ok := n.Fun.(*ast.Ident)
+		if !ok {
+			return nil, nil
 		}
+
+		intCast := strings.HasPrefix(fun.Name, "int") || strings.HasPrefix(fun.Name, "uint")
+		if !intCast {
+			return nil, nil
+		}
+
+		// Detect intX(y) and uintX(y) for any X, where y is not an int literal.
+		// n.Args[0] is of type ast.Expr. It's the arg to the type conversion.
+		// If the expression string is a constant integer, then ignore.
+		// TODO: check that the constant will actually fit and wont overflow?
+		arg := n.Args[0]
+		exprString := types.ExprString(arg)
+		intLiteral, err := strconv.Atoi(exprString)
+		if err == nil {
+			// TODO: probably use ParseInt and check if it fits in the target.
+			_ = intLiteral
+			return nil, nil
+		}
+
+		// TODO: run the go type checker to determine the
+		// type of arg so we can check if the type
+		// conversion is reducing the bit-size and could overflow.
+		// If not, this will be a false positive for now ...
+		// See https://golang.org/pkg/go/types/#Config.Check
+		return gosec.NewIssue(ctx, n, i.ID(), i.What, i.Severity, i.Confidence), nil
 	}
 
 	return nil, nil
