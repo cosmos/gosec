@@ -1,4 +1,6 @@
-module github.com/securego/gosec/v2
+go 1.17
+
+module github.com/informalsystems/gosec/v2
 
 require (
 	github.com/gookit/color v1.3.1
@@ -25,4 +27,3 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-go 1.17
