@@ -18,7 +18,7 @@ import (
 	"go/ast"
 	"strings"
 
-	"github.com/securego/gosec/v2"
+	"github.com/informalsystems/gosec/v2"
 )
 
 type blocklistedImport struct {

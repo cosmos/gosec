@@ -2,9 +2,10 @@ package output
 
 import (
 	"fmt"
-	"github.com/securego/gosec/v2"
 	"strconv"
 	"strings"
+
+	"github.com/informalsystems/gosec/v2"
 )
 
 type sarifLevel string

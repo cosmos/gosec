@@ -19,7 +19,7 @@ import (
 	"go/ast"
 	"strconv"
 
-	"github.com/securego/gosec/v2"
+	"github.com/informalsystems/gosec/v2"
 )
 
 type bitsizeOverflowCheck struct {

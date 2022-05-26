@@ -15,8 +15,8 @@
 package rules
 
 import (
-	"github.com/securego/gosec/v2"
-	"github.com/securego/gosec/v2/rules/sdk"
+	"github.com/informalsystems/gosec/v2"
+	"github.com/informalsystems/gosec/v2/rules/sdk"
 )
 
 // RuleDefinition contains the description of a rule and a mechanism to
