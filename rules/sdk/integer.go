@@ -38,8 +38,7 @@ func (i *integerOverflowCheck) ID() string {
 // TODO: restrict it to just the possible bit-sizes for X (unspecified, 8, 16, 32, 64)
 // TODO: check if y's bit-size is greater than X
 func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, error) {
-
-	// ignore if its protobuf
+	// ignore if it's protobuf
 	fileName := ctx.FileSet.File(node.Pos()).Name()
 	if strings.HasSuffix(fileName, ".pb.go") {
 		return nil, nil
@@ -68,6 +67,19 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 			// TODO: probably use ParseInt and check if it fits in the target.
 			_ = intLiteral
 			return nil, nil
+		}
+
+		switch arg := arg.(type) {
+		case *ast.CallExpr:
+			// len() returns an int that is always >= 0, so it will fit in a uint, uint64, or int64.
+			if argFun, ok := arg.Fun.(*ast.Ident); ok && argFun.Name == "len" && (fun.Name == "uint" || fun.Name == "uint64" || fun.Name == "int64") {
+				return nil, nil
+			}
+		case *ast.SelectorExpr:
+			// If the argument is being cast to its underlying type, there's no risk.
+			if ctx.Info.TypeOf(arg).Underlying() == ctx.Info.TypeOf(fun) {
+				return nil, nil
+			}
 		}
 
 		// TODO: run the go type checker to determine the
