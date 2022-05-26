@@ -15,7 +15,6 @@
 package sdk
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 
@@ -35,14 +34,14 @@ func (mr *mapRanging) ID() string {
 	return mr.MetaData.ID
 }
 
-func extractIdent(call ast.Expr) *ast.Ident {
+func extractIdent(call ast.Expr) (*ast.Ident, error) {
 	switch n := call.(type) {
 	case *ast.Ident:
-		return n
+		return n, nil
 
 	case *ast.SelectorExpr:
 		if ident, ok := n.X.(*ast.Ident); ok {
-			return ident
+			return ident, nil
 		}
 		if n.Sel != nil {
 			return extractIdent(n.Sel)
@@ -50,7 +49,7 @@ func extractIdent(call ast.Expr) *ast.Ident {
 		return extractIdent(n.X)
 
 	default:
-		panic(fmt.Sprintf("Unhandled type: %T", call))
+		return nil, fmt.Errorf("Unhandled type: %T", call)
 	}
 }
 
@@ -84,14 +83,20 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	case *ast.CallExpr:
 		// Synthesize the declaration to be an *ast.FuncType from
 		// either function declarations or function literals.
-		ident := extractIdent(rangeRHS.Fun)
+		ident, err := extractIdent(rangeRHS.Fun)
+		if err != nil {
+			return nil, err
+		}
 		if ident == nil {
-			panic(fmt.Sprintf("Couldn't find ident: %#v\n", rangeRHS.Fun))
+			return nil, fmt.Errorf("couldn't find ident: %#v", rangeRHS.Fun)
 		}
 		if ident.Obj == nil {
 			sel, ok := rangeRHS.Fun.(*ast.SelectorExpr)
 			if ok && sel.Sel != nil {
-				ident = extractIdent(sel.Sel)
+				ident, err = extractIdent(sel.Sel)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 		if ident.Obj == nil {
@@ -113,11 +118,20 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 		}
 
 	case *ast.SelectorExpr:
-		if ident := extractIdent(rangeRHS.X); ident != nil {
-			decl = ident.Obj.Decl
-		} else {
-			panic(fmt.Sprintf("%#v\n", rangeRHS.X.(*ast.Ident)))
+		ident, err := extractIdent(rangeRHS.X)
+		if err != nil {
+			return nil, err
 		}
+		if ident == nil {
+			return nil, fmt.Errorf("%#v", rangeRHS.X.(*ast.Ident))
+		}
+		decl = ident.Obj.Decl
+
+	case *ast.SliceExpr:
+		return nil, nil
+
+	case *ast.IndexExpr:
+		return nil, nil
 	}
 
 	if decl == nil {
@@ -144,7 +158,10 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 		if _, ok := decl.Type.(*ast.MapType); !ok {
 			return nil, nil
 		}
-
+	case *ast.Field:
+		if _, ok := decl.Type.(*ast.MapType); !ok {
+			return nil, nil
+		}
 	default:
 		return nil, fmt.Errorf("unhandled type of declaration: %T", decl)
 	}
@@ -157,26 +174,25 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	// NOR
 	//     for key, value := range m {
 	if rangeStmt.Key == nil {
-		return nil, errors.New("the key in the range statement should be non-nil: want: for key := range m")
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the key in the range statement should be non-nil: want: for key := range m", mr.Severity, mr.Confidence), nil
 	}
 	if rangeStmt.Value != nil {
-		return nil, errors.New("the value in the range statement should be nil: want: for key := range m")
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the value in the range statement should be nil: want: for key := range m", mr.Severity, mr.Confidence), nil
 	}
 
 	// Now ensure that only either "append" or "delete" statement is present in the range.
 	rangeBody := rangeStmt.Body
 
-	if n := len(rangeBody.List); n > 1 {
-		return nil, fmt.Errorf("got %d statements, yet expecting exactly 1 statement (either append or delete) in a range with a map", n)
+	if n := len(rangeBody.List); n != 1 {
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected exactly 1 statement (either append or delete) in a range with a map, got %d", n), mr.Severity, mr.Confidence), nil
 	}
 
 	stmt0 := rangeBody.List[0]
 	switch stmt := stmt0.(type) {
 	case *ast.ExprStmt:
 		call := stmt.X.(*ast.CallExpr)
-		name, ok := eitherAppendOrDeleteCall(call)
-		if !ok {
-			return nil, fmt.Errorf("expecting only delete, got: %q", name)
+		if name, ok := onlyDeleteCall(call); !ok {
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected only delete, got: %q", name), mr.Severity, mr.Confidence), nil
 		}
 		// We got "delete", so this is safe to recognize
 		// as this is the fast map clearing idiom.
@@ -187,27 +203,30 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 		if !ok {
 			return nil, fmt.Errorf("expecting an identifier for an append call to a slice, got %T", stmt.Lhs[0])
 		}
+		if lhs0.Obj == nil {
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expecting an array/slice being used to retrieve keys, got _", mr.Severity, mr.Confidence), nil
+		}
 
 		typ, err := typeOf(lhs0.Obj)
 		if err != nil {
 			return nil, err
 		}
 		if _, ok := typ.(*ast.ArrayType); !ok {
-			return nil, fmt.Errorf("expecting an array/slice being used to retrieve keys, got %T", lhs0.Obj)
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an array/slice being used to retrieve keys, got %T", typ), mr.Severity, mr.Confidence), nil
 		}
 
 		rhs0, ok := stmt.Rhs[0].(*ast.CallExpr)
 		if !ok {
-			return nil, fmt.Errorf("expecting only an append, got: %#v", stmt.Rhs[0])
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting only an append(), got: %#v", stmt.Rhs[0]), mr.Severity, mr.Confidence), nil
 		}
 		// The Right Hand Side should only contain the "append".
-		if name, ok := eitherAppendOrDeleteCall(rhs0); !ok {
-			return nil, fmt.Errorf(`got call %q want "append" or "delete"`, name)
+		if name, ok := onlyAppendCall(rhs0); !ok {
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting only an append(), got: %#v", name), mr.Severity, mr.Confidence), nil
 		}
 		return nil, nil
 
 	default:
-		return nil, fmt.Errorf("got %T; expecting exactly 1 statement (either append or delete) in a range with a map", stmt)
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("got %T; expecting exactly 1 statement (either append or delete) in a range with a map", stmt), mr.Severity, mr.Confidence), nil
 	}
 }
 
@@ -228,17 +247,20 @@ func mapHandleAssignStmt(decl *ast.AssignStmt) (skip bool) {
 	}
 }
 
-func eitherAppendOrDeleteCall(callExpr *ast.CallExpr) (fnName string, ok bool) {
+func onlyAppendCall(callExpr *ast.CallExpr) (string, bool) {
 	fn, ok := callExpr.Fun.(*ast.Ident)
 	if !ok {
 		return "", false
 	}
-	switch fn.Name {
-	case "append", "delete":
-		return fn.Name, true
-	default:
-		return fn.Name, false
+	return fn.Name, fn.Name == "append"
+}
+
+func onlyDeleteCall(callExpr *ast.CallExpr) (string, bool) {
+	fn, ok := callExpr.Fun.(*ast.Ident)
+	if !ok {
+		return "", false
 	}
+	return fn.Name, fn.Name == "delete"
 }
 
 func typeOf(value interface{}) (ast.Node, error) {
@@ -255,8 +277,14 @@ func typeOf(value interface{}) (ast.Node, error) {
 		if _, ok := rhs.(*ast.CompositeLit); ok {
 			return typeOf(rhs)
 		}
+		if r, ok := rhs.(*ast.Ident); ok {
+			return typeOf(r.Obj)
+		}
+		if r, ok := rhs.(*ast.UnaryExpr); ok {
+			return r.X, nil
+		}
 
-		panic(fmt.Sprintf("Non-CallExpr: %#v\n", rhs))
+		return nil, fmt.Errorf("Non-CallExpr: %#v, type %T", rhs, rhs)
 
 	case *ast.CallExpr:
 		decl := typ
@@ -276,9 +304,13 @@ func typeOf(value interface{}) (ast.Node, error) {
 			return nil, fmt.Errorf("returns %d arguments, want %d", g, w)
 		}
 		return returns.List[0].Type, nil
+
+	case *ast.ValueSpec:
+		return typ.Type, nil
+
 	}
 
-	panic(fmt.Sprintf("Unexpected type: %T", value))
+	return nil, fmt.Errorf("unexpected type: %T", value)
 }
 
 // NewMapRangingCheck returns an error if a map is being iterated over in a for loop outside
