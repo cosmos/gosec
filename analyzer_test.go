@@ -7,13 +7,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/securego/gosec/v2"
-	"github.com/securego/gosec/v2/rules"
+	"github.com/informalsystems/gosec/v2"
+	"github.com/informalsystems/gosec/v2/rules"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/informalsystems/gosec/v2/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/securego/gosec/v2/testutils"
 )
 
 var _ = Describe("Analyzer", func() {

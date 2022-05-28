@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"strings"
 
+	"github.com/informalsystems/gosec/v2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/securego/gosec/v2"
 )
 
 var _ = Describe("Configuration", func() {

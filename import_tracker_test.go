@@ -1,8 +1,8 @@
 package gosec_test
 
 import (
-	"github.com/securego/gosec/v2"
-	"github.com/securego/gosec/v2/testutils"
+	"github.com/informalsystems/gosec/v2"
+	"github.com/informalsystems/gosec/v2/testutils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
