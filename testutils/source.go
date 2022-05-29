@@ -2422,6 +2422,7 @@ func main() {
 	}
 
 	values := make([]int, 0, len(m))
+	// key values should not be ignored
 	for _, value := range m {
 		values = append(values, value)
 	}
@@ -2430,6 +2431,7 @@ func main() {
 		k, v interface{}
 	}
 	kvL := make([]*kv, 0, len(m))
+	// map values should not be read in a range loop
 	for k, v := range m {
 		kvL = append(kvL, &kv{k, v})
 	}
@@ -2446,14 +2448,71 @@ func main() {
 		delete(m, k)
 	}
 
-	for k, v := range do() {
-                println(v)
+	// loop body should only have one statement
+	for k := range do() {
+		println(k)
 		delete(m, k)
+	}
+
+	// expression should only be append() or delete()
+	for k := range do() {
+		println(k)
+	}
+
+	// append()'s return value should not be ignored
+	for k := range do() {
+		append(values, k)
+	}
+
+	// the loop body should not be empty
+	for k := range do() {
+		// _ = append(values, value)
+	}
+
+	// the keys should not be ignored
+	for k := range do() {
+		_ = append(values, value)
+	}
+
+	// the keys should be appended to an array/slice
+	for k := range do() {
+		a := k
+		_ = a
+	}
+
+	// the keys should be appended to an array/slice
+	var a string
+	for k := range do() {
+		a = k
+	}
+	_ = a
+
+	// the keys should be appended to an array/slice
+	var a string
+	for k := range do() {
+		a := k
+	}
+	_ = a
+
+	// rhs should only contain append()
+	for k := range do() {
+		keys = keys
+	}
+
+	// rhs should only contain append()
+	for k := range do() {
+		keys = noop(keys)
+	}
+
+	// loop body should only be an expression or assignment statement
+	for k := range do() {
+		{}
 	}
 }
 
 func do() map[string]string { return nil }
-`}, 3, gosec.NewConfig(),
+func noop(keys []string) []string {return keys}
+`}, 13, gosec.NewConfig(),
 		},
 	}
 )

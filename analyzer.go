@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"strings"
@@ -117,7 +118,14 @@ func (gosec *Analyzer) Config() Config {
 // LoadRules instantiates all the rules to be used when analyzing source
 // packages
 func (gosec *Analyzer) LoadRules(ruleDefinitions map[string]RuleBuilder) {
-	for id, def := range ruleDefinitions {
+	ids := make([]string, 0, len(ruleDefinitions))
+	for id := range ruleDefinitions {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	for _, id := range ids {
+		def := ruleDefinitions[id]
 		r, nodes := def(id, gosec.config)
 		gosec.ruleset.Register(r, nodes...)
 	}
