@@ -24,7 +24,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
-	"runtime"
+	"runtime" // #nosec G702
 	"strconv"
 	"strings"
 )

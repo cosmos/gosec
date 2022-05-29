@@ -14,7 +14,7 @@ package gosec
 
 import (
 	"go/ast"
-	"reflect"
+	"reflect" // #nosec G702
 )
 
 // The Rule interface used by all rules supported by gosec.

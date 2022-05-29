@@ -36,6 +36,7 @@ func containsReaderCall(node ast.Node, ctx *gosec.Context, list gosec.CallList) 
 		return true
 	}
 	// Resolve type info of ident (for *archive/zip.File.Open)
+	/* #nosec G703 */
 	s, idt, _ := gosec.GetCallInfo(node, ctx)
 	return list.Contains(s, idt)
 }
