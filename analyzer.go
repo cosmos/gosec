@@ -166,17 +166,22 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 
 	gosec.logger.Println("Import directory:", abspath)
 
-	// Find the deepest go.mod for the package.
+	// Find the deepest go.mod for the package, defaulting to the working directory.
 	absWorkingDir, err := GetPkgAbsPath(".")
 	if err != nil {
 		return nil, err
 	}
 	absGoModPath := absWorkingDir
-	for p := abspath; p != absWorkingDir; p = filepath.Dir(p) {
+	for p := abspath; p != absWorkingDir; {
 		if info, err := os.Stat(filepath.Join(p, "go.mod")); err == nil && !info.IsDir() {
 			absGoModPath = p
 			break
 		}
+		parentDir := filepath.Dir(p)
+		if parentDir == p {
+			break
+		}
+		p = parentDir
 	}
 
 	// step 1/3 create build context.
