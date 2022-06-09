@@ -165,21 +165,40 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 	}
 
 	gosec.logger.Println("Import directory:", abspath)
+
+	// Find the deepest go.mod for the package, defaulting to the working directory.
+	absWorkingDir, err := GetPkgAbsPath(".")
+	if err != nil {
+		return nil, err
+	}
+	absGoModPath := absWorkingDir
+	for p := abspath; p != absWorkingDir; p = filepath.Dir(p) {
+		if info, err := os.Stat(filepath.Join(p, "go.mod")); err == nil && !info.IsDir() {
+			absGoModPath = p
+			break
+		}
+		// Break out if we've reached the root directory.
+		if strings.HasSuffix(p, string(filepath.Separator)) {
+			break
+		}
+	}
+
 	// step 1/3 create build context.
 	buildD := build.Default
 	// step 2/3: add build tags to get env dependent files into basePackage.
 	buildD.BuildTags = conf.BuildFlags
-	basePackage, err := buildD.ImportDir(pkgPath, build.ImportComment)
+	buildD.Dir = absGoModPath
+	basePackage, err := buildD.ImportDir(abspath, build.ImportComment)
 	if err != nil {
 		return []*packages.Package{}, fmt.Errorf("importing dir %q: %v", pkgPath, err)
 	}
 
 	var packageFiles []string
 	for _, filename := range basePackage.GoFiles {
-		packageFiles = append(packageFiles, path.Join(pkgPath, filename))
+		packageFiles = append(packageFiles, path.Join(abspath, filename))
 	}
 	for _, filename := range basePackage.CgoFiles {
-		packageFiles = append(packageFiles, path.Join(pkgPath, filename))
+		packageFiles = append(packageFiles, path.Join(abspath, filename))
 	}
 
 	if gosec.tests {
@@ -187,12 +206,13 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		testsFiles = append(testsFiles, basePackage.TestGoFiles...)
 		testsFiles = append(testsFiles, basePackage.XTestGoFiles...)
 		for _, filename := range testsFiles {
-			packageFiles = append(packageFiles, path.Join(pkgPath, filename))
+			packageFiles = append(packageFiles, path.Join(abspath, filename))
 		}
 	}
 
 	// step 3/3 remove build tags from conf to proceed build correctly.
 	conf.BuildFlags = nil
+	conf.Dir = absGoModPath
 	pkgs, err := packages.Load(conf, packageFiles...)
 	if err != nil {
 		return []*packages.Package{}, fmt.Errorf("loading files from package %q: %v", pkgPath, err)
