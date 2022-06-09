@@ -172,16 +172,15 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		return nil, err
 	}
 	absGoModPath := absWorkingDir
-	for p := abspath; p != absWorkingDir; {
+	for p := abspath; p != absWorkingDir; p = filepath.Dir(p) {
 		if info, err := os.Stat(filepath.Join(p, "go.mod")); err == nil && !info.IsDir() {
 			absGoModPath = p
 			break
 		}
-		parentDir := filepath.Dir(p)
-		if parentDir == p {
+		// Break out if we've reached the root directory.
+		if strings.HasSuffix(p, string(filepath.Separator)) {
 			break
 		}
-		p = parentDir
 	}
 
 	// step 1/3 create build context.
