@@ -17,6 +17,7 @@ package sdk
 import (
 	"fmt"
 	"go/ast"
+	"go/types"
 
 	"github.com/informalsystems/gosec/v2"
 )
@@ -32,25 +33,6 @@ type mapRanging struct {
 
 func (mr *mapRanging) ID() string {
 	return mr.MetaData.ID
-}
-
-func extractIdent(call ast.Expr) (*ast.Ident, error) {
-	switch n := call.(type) {
-	case *ast.Ident:
-		return n, nil
-
-	case *ast.SelectorExpr:
-		if ident, ok := n.X.(*ast.Ident); ok {
-			return ident, nil
-		}
-		if n.Sel != nil {
-			return extractIdent(n.Sel)
-		}
-		return extractIdent(n.X)
-
-	default:
-		return nil, fmt.Errorf("Unhandled type: %T", call)
-	}
 }
 
 func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, error) {
@@ -75,95 +57,13 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	// 4. The only exception is if we have the map clearing idiom.
 
 	// 1. Ensure that the type of right hand side of the range is eventually a map.
-	var decl interface{}
-	switch rangeRHS := rangeStmt.X.(type) {
-	case *ast.Ident:
-		decl = rangeRHS.Obj.Decl
 
-	case *ast.CallExpr:
-		// Synthesize the declaration to be an *ast.FuncType from
-		// either function declarations or function literals.
-		ident, err := extractIdent(rangeRHS.Fun)
-		if err != nil {
-			return nil, err
-		}
-		if ident == nil {
-			return nil, fmt.Errorf("couldn't find ident: %#v", rangeRHS.Fun)
-		}
-		if ident.Obj == nil {
-			sel, ok := rangeRHS.Fun.(*ast.SelectorExpr)
-			if ok && sel.Sel != nil {
-				ident, err = extractIdent(sel.Sel)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-		if ident.Obj == nil {
+	if typ := ctx.Info.TypeOf(rangeStmt.X); typ != nil {
+		if _, ok := typ.Underlying().(*types.Map); !ok {
 			return nil, nil
 		}
-
-		idecl := ident.Obj.Decl
-		switch idecl := idecl.(type) {
-		case *ast.FuncDecl:
-			decl = idecl.Type
-
-		case *ast.AssignStmt:
-			var err error
-			decl, err = typeOf(idecl.Rhs[0])
-			if err != nil {
-				return nil, err
-			}
-
-		}
-
-	case *ast.SelectorExpr:
-		ident, err := extractIdent(rangeRHS.X)
-		if err != nil {
-			return nil, err
-		}
-		if ident == nil {
-			return nil, fmt.Errorf("%#v", rangeRHS.X.(*ast.Ident))
-		}
-		decl = ident.Obj.Decl
-
-	case *ast.SliceExpr:
-		return nil, nil
-
-	case *ast.IndexExpr:
-		return nil, nil
-	}
-
-	if decl == nil {
-		return nil, fmt.Errorf("failed to extract decl from: %T", rangeStmt.X)
-	}
-
-	switch decl := decl.(type) {
-	case *ast.FuncType:
-		returns := decl.Results
-		if g, w := len(returns.List), 1; g != w {
-			return nil, fmt.Errorf("returns %d arguments, want %d", g, w)
-		}
-		returnType := returns.List[0].Type
-		if _, ok := returnType.(*ast.MapType); !ok {
-			return nil, nil
-		}
-
-	case *ast.AssignStmt:
-		if skip := mapHandleAssignStmt(decl); skip {
-			return nil, nil
-		}
-
-	case *ast.ValueSpec:
-		if _, ok := decl.Type.(*ast.MapType); !ok {
-			return nil, nil
-		}
-	case *ast.Field:
-		if _, ok := decl.Type.(*ast.MapType); !ok {
-			return nil, nil
-		}
-	default:
-		return nil, fmt.Errorf("unhandled type of declaration: %T", decl)
+	} else {
+		return nil, fmt.Errorf("unable to get type of expr %#v", rangeStmt.X)
 	}
 
 	// 2. Let's be pedantic to only permit the keys to be iterated upon:
@@ -201,18 +101,21 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	case *ast.AssignStmt:
 		lhs0, ok := stmt.Lhs[0].(*ast.Ident)
 		if !ok {
-			return nil, fmt.Errorf("expecting an identifier for an append call to a slice, got %T", stmt.Lhs[0])
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an identifier for an append call to a slice, got %T", stmt.Lhs[0]), mr.Severity, mr.Confidence), nil
 		}
 		if lhs0.Obj == nil {
 			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expecting an array/slice being used to retrieve keys, got _", mr.Severity, mr.Confidence), nil
 		}
 
-		typ, err := typeOf(lhs0.Obj)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := typ.(*ast.ArrayType); !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an array/slice being used to retrieve keys, got %T", typ), mr.Severity, mr.Confidence), nil
+		if typ := ctx.Info.TypeOf(lhs0); typ != nil {
+			switch typ := ctx.Info.Types[lhs0].Type; typ.(type) {
+			case *types.Array:
+			case *types.Slice:
+			default:
+				return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an array/slice being used to retrieve keys, got %T", typ), mr.Severity, mr.Confidence), nil
+			}
+		} else {
+			return nil, fmt.Errorf("unable to get type of %#v", lhs0)
 		}
 
 		rhs0, ok := stmt.Rhs[0].(*ast.CallExpr)
@@ -230,23 +133,6 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	}
 }
 
-func mapHandleAssignStmt(decl *ast.AssignStmt) (skip bool) {
-	switch rhs0 := decl.Rhs[0].(type) {
-	case *ast.CompositeLit:
-		if _, ok := rhs0.Type.(*ast.MapType); !ok {
-			return true
-		}
-		return false
-
-	case *ast.CallExpr:
-		return true
-
-	default:
-		// TODO: handle other types.
-		return true
-	}
-}
-
 func onlyAppendCall(callExpr *ast.CallExpr) (string, bool) {
 	fn, ok := callExpr.Fun.(*ast.Ident)
 	if !ok {
@@ -261,56 +147,6 @@ func onlyDeleteCall(callExpr *ast.CallExpr) (string, bool) {
 		return "", false
 	}
 	return fn.Name, fn.Name == "delete"
-}
-
-func typeOf(value interface{}) (ast.Node, error) {
-	switch typ := value.(type) {
-	case *ast.Object:
-		return typeOf(typ.Decl)
-
-	case *ast.AssignStmt:
-		decl := typ
-		rhs := decl.Rhs[0]
-		if _, ok := rhs.(*ast.CallExpr); ok {
-			return typeOf(rhs)
-		}
-		if _, ok := rhs.(*ast.CompositeLit); ok {
-			return typeOf(rhs)
-		}
-		if r, ok := rhs.(*ast.Ident); ok {
-			return typeOf(r.Obj)
-		}
-		if r, ok := rhs.(*ast.UnaryExpr); ok {
-			return r.X, nil
-		}
-
-		return nil, fmt.Errorf("Non-CallExpr: %#v, type %T", rhs, rhs)
-
-	case *ast.CallExpr:
-		decl := typ
-		fn := decl.Fun.(*ast.Ident)
-		if fn.Name == "make" {
-			// We can infer the type from the first argument.
-			return decl.Args[0], nil
-		}
-		return typeOf(decl.Args[0])
-
-	case *ast.CompositeLit:
-		return typ.Type, nil
-
-	case *ast.FuncLit:
-		returns := typ.Type.Results
-		if g, w := len(returns.List), 1; g != w {
-			return nil, fmt.Errorf("returns %d arguments, want %d", g, w)
-		}
-		return returns.List[0].Type, nil
-
-	case *ast.ValueSpec:
-		return typ.Type, nil
-
-	}
-
-	return nil, fmt.Errorf("unexpected type: %T", value)
 }
 
 // NewMapRangingCheck returns an error if a map is being iterated over in a for loop outside

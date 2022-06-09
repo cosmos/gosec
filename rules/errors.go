@@ -17,6 +17,7 @@ package rules
 import (
 	"go/ast"
 	"go/types"
+	"sort"
 
 	"github.com/informalsystems/gosec/v2"
 )
@@ -89,8 +90,13 @@ func NewNoErrorCheck(id string, conf gosec.Config) (gosec.Rule, []ast.Node) {
 
 	if configured, ok := conf["G104"]; ok {
 		if whitelisted, ok := configured.(map[string]interface{}); ok {
-			for pkg, funcs := range whitelisted {
-				if funcs, ok := funcs.([]interface{}); ok {
+			pkgs := make([]string, 0, len(whitelisted))
+			for pkg := range whitelisted {
+				pkgs = append(pkgs, pkg)
+			}
+			sort.Slice(pkgs, func(i, j int) bool { return pkgs[i] < pkgs[j] })
+			for _, pkg := range pkgs {
+				if funcs, ok := whitelisted[pkg].([]interface{}); ok {
 					whitelist.AddAll(pkg, toStringSlice(funcs)...)
 				}
 			}

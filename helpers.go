@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime" // #nosec G702
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -267,7 +268,12 @@ func GetImportedName(path string, ctx *Context) (string, bool) {
 // GetImportPath resolves the full import path of an identifier based on
 // the imports in the current context.
 func GetImportPath(name string, ctx *Context) (string, bool) {
+	paths := make([]string, 0, len(ctx.Imports.Imported))
 	for path := range ctx.Imports.Imported {
+		paths = append(paths, path)
+	}
+	sort.Slice(paths, func(i, j int) bool { return paths[i] < paths[j] })
+	for _, path := range paths {
 		if imported, ok := GetImportedName(path, ctx); ok && imported == name {
 			return path, true
 		}

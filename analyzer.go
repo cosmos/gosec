@@ -356,6 +356,8 @@ func (gosec *Analyzer) Visit(n ast.Node) ast.Visitor {
 	// Now create the union of exclusions.
 	ignores := map[string]bool{}
 	if len(gosec.context.Ignores) > 0 {
+		// TODO(https://github.com/informalsystems/gosec/issues/24): Map copying is currently incorrectly flagged by G705. When this is fixed, we can remove the below annotation.
+		// #nosec G705
 		for k, v := range gosec.context.Ignores[0] {
 			ignores[k] = v
 		}

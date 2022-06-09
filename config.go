@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
 )
 
 const (
@@ -46,8 +47,13 @@ func (c Config) convertGlobals() {
 	if globals, ok := c[Globals]; ok {
 		if settings, ok := globals.(map[string]interface{}); ok {
 			validGlobals := map[GlobalOption]string{}
-			for k, v := range settings {
-				validGlobals[c.keyToGlobalOptions(k)] = fmt.Sprintf("%v", v)
+			keys := make([]string, 0, len(settings))
+			for k := range settings {
+				keys = append(keys, k)
+			}
+			sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+			for _, k := range keys {
+				validGlobals[c.keyToGlobalOptions(k)] = fmt.Sprintf("%v", settings[k])
 			}
 			c[Globals] = validGlobals
 		}
