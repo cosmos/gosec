@@ -15,6 +15,8 @@
 package rules
 
 import (
+	"sort"
+
 	"github.com/informalsystems/gosec/v2"
 	"github.com/informalsystems/gosec/v2/rules/sdk"
 )
@@ -32,8 +34,14 @@ type RuleList map[string]RuleDefinition
 
 // Builders returns all the create methods for a given rule list
 func (rl RuleList) Builders() map[string]gosec.RuleBuilder {
+	ids := make([]string, 0, len(rl))
+	for id := range rl {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	builders := make(map[string]gosec.RuleBuilder)
-	for _, def := range rl {
+	for _, id := range ids {
+		def := rl[id]
 		builders[def.ID] = def.Create
 	}
 	return builders

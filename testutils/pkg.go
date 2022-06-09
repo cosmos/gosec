@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/informalsystems/gosec/v2"
@@ -52,8 +53,13 @@ func (p *TestPackage) write() error {
 	if p.onDisk {
 		return nil
 	}
-	for filename, content := range p.Files {
-		if e := ioutil.WriteFile(filename, []byte(content), 0644); e != nil {
+	filenames := make([]string, 0, len(p.Files))
+	for filename := range p.Files {
+		filenames = append(filenames, filename)
+	}
+	sort.Slice(filenames, func(i, j int) bool { return filenames[i] < filenames[j] })
+	for _, filename := range filenames {
+		if e := ioutil.WriteFile(filename, []byte(p.Files[filename]), 0644); e != nil {
 			return e
 		} // #nosec G306
 	}

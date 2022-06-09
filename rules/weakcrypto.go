@@ -16,6 +16,7 @@ package rules
 
 import (
 	"go/ast"
+	"sort"
 
 	"github.com/informalsystems/gosec/v2"
 )
@@ -30,8 +31,13 @@ func (r *usesWeakCryptography) ID() string {
 }
 
 func (r *usesWeakCryptography) Match(n ast.Node, c *gosec.Context) (*gosec.Issue, error) {
-	for pkg, funcs := range r.blocklist {
-		if _, matched := gosec.MatchCallByPackage(n, c, pkg, funcs...); matched {
+	pkgs := make([]string, 0, len(r.blocklist))
+	for pkg := range r.blocklist {
+		pkgs = append(pkgs, pkg)
+	}
+	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i] < pkgs[j] })
+	for _, pkg := range pkgs {
+		if _, matched := gosec.MatchCallByPackage(n, c, pkg, r.blocklist[pkg]...); matched {
 			return gosec.NewIssue(c, n, r.ID(), r.What, r.Severity, r.Confidence), nil
 		}
 	}

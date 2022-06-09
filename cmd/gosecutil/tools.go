@@ -23,6 +23,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -46,12 +47,11 @@ func newUtils() *utilities {
 }
 
 func (u *utilities) String() string {
-	i := 0
-	keys := make([]string, len(u.commands))
+	keys := make([]string, 0, len(u.commands))
 	for k := range u.commands {
-		keys[i] = k
-		i++
+		keys = append(keys, k)
 	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	return strings.Join(keys, ", ")
 }
 
@@ -207,8 +207,13 @@ func dumpUses(files ...string) {
 		if !checkContext(context, file) {
 			return
 		}
-		for ident, obj := range context.info.Uses {
-			fmt.Printf("IDENT: %v, OBJECT: %v\n", ident, obj)
+		idents := make([]*ast.Ident, 0, len(context.info.Uses))
+		for ident := range context.info.Uses {
+			idents = append(idents, ident)
+		}
+		sort.Slice(idents, func(i, j int) bool { return idents[i].String() < idents[j].String() })
+		for _, ident := range idents {
+			fmt.Printf("IDENT: %v, OBJECT: %v\n", ident, context.info.Uses[ident])
 		}
 	}
 }
@@ -222,8 +227,13 @@ func dumpTypes(files ...string) {
 		if !checkContext(context, file) {
 			return
 		}
-		for expr, tv := range context.info.Types {
-			fmt.Printf("EXPR: %v, TYPE: %v\n", expr, tv)
+		exprs := make([]ast.Expr, 0, len(context.info.Types))
+		for expr := range context.info.Types {
+			exprs = append(exprs, expr)
+		}
+		sort.Slice(exprs, func(i, j int) bool { return fmt.Sprintf("%v", exprs[i]) < fmt.Sprintf("%v", exprs[j]) })
+		for _, expr := range exprs {
+			fmt.Printf("EXPR: %v, TYPE: %v\n", expr, context.info.Types[expr])
 		}
 	}
 }
@@ -237,8 +247,13 @@ func dumpDefs(files ...string) {
 		if !checkContext(context, file) {
 			return
 		}
-		for ident, obj := range context.info.Defs {
-			fmt.Printf("IDENT: %v, OBJ: %v\n", ident, obj)
+		idents := make([]*ast.Ident, 0, len(context.info.Defs))
+		for ident := range context.info.Defs {
+			idents = append(idents, ident)
+		}
+		sort.Slice(idents, func(i, j int) bool { return idents[i].String() < idents[j].String() })
+		for _, ident := range idents {
+			fmt.Printf("IDENT: %v, OBJECT: %v\n", ident, context.info.Defs[ident])
 		}
 	}
 }
