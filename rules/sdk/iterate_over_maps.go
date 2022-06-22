@@ -54,7 +54,9 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	//    NOR
 	//          for _, v := range m
 	// 3. Ensure that only keys are appended
-	// 4. The only exception is if we have the map clearing idiom.
+	// 4. Exceptions:
+	//   * The map clearing idiom
+	//   * `for k, v := range m`` is permitted for map copying
 
 	// 1. Ensure that the type of right hand side of the range is eventually a map.
 
@@ -66,33 +68,44 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 		return nil, fmt.Errorf("unable to get type of expr %#v", rangeStmt.X)
 	}
 
+	// Ensure that the range body has only one statement.
+	rangeBody := rangeStmt.Body
+	if n := len(rangeBody.List); n != 1 {
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected exactly 1 statement (either append, delete, or copying to another map) in a range with a map, got %d", n), mr.Severity, mr.Confidence), nil
+	}
+	stmt0 := rangeBody.List[0]
+
 	// 2. Let's be pedantic to only permit the keys to be iterated upon:
 	// Allow only:
 	//     for key := range m {
 	// AND NOT:
 	//     for _, value := range m {
-	// NOR
+	// NOR*
 	//     for key, value := range m {
+	// * the value can be used when copying a map
 	if rangeStmt.Key == nil {
-		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the key in the range statement should be non-nil: want: for key := range m", mr.Severity, mr.Confidence), nil
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the key in the range statement should not be _: want: for key := range m", mr.Severity, mr.Confidence), nil
+	}
+	// If this is a map copy, rangeStmt.Value is allowed to be non-nil.
+	if stmt, ok := stmt0.(*ast.AssignStmt); ok {
+		mapCopy, err := isMapCopy(ctx, stmt, rangeStmt)
+		if err != nil {
+			return nil, err
+		}
+		if mapCopy {
+			return nil, nil
+		}
 	}
 	if rangeStmt.Value != nil {
-		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the value in the range statement should be nil: want: for key := range m", mr.Severity, mr.Confidence), nil
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "the value in the range statement should be _ unless copying a map: want: for key := range m", mr.Severity, mr.Confidence), nil
 	}
 
-	// Now ensure that only either "append" or "delete" statement is present in the range.
-	rangeBody := rangeStmt.Body
-
-	if n := len(rangeBody.List); n != 1 {
-		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected exactly 1 statement (either append or delete) in a range with a map, got %d", n), mr.Severity, mr.Confidence), nil
-	}
-
-	stmt0 := rangeBody.List[0]
+	//  Ensure that only either an "append" or "delete" statement is present in the range.
 	switch stmt := stmt0.(type) {
 	case *ast.ExprStmt:
 		call := stmt.X.(*ast.CallExpr)
 		if name, ok := onlyDeleteCall(call); !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected only delete, got: %q", name), mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected either an append, delete, or copy to another map in a range with a map, got: %q", name), mr.Severity, mr.Confidence), nil
 		}
 		// We got "delete", so this is safe to recognize
 		// as this is the fast map clearing idiom.
@@ -101,10 +114,10 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	case *ast.AssignStmt:
 		lhs0, ok := stmt.Lhs[0].(*ast.Ident)
 		if !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an identifier for an append call to a slice, got %T", stmt.Lhs[0]), mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected an identifier for an append call to a slice, got %T", stmt.Lhs[0]), mr.Severity, mr.Confidence), nil
 		}
 		if lhs0.Obj == nil {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expecting an array/slice being used to retrieve keys, got _", mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expected an array/slice being used to retrieve keys, got _", mr.Severity, mr.Confidence), nil
 		}
 
 		if typ := ctx.Info.TypeOf(lhs0); typ != nil {
@@ -112,7 +125,7 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 			case *types.Array:
 			case *types.Slice:
 			default:
-				return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting an array/slice being used to retrieve keys, got %T", typ), mr.Severity, mr.Confidence), nil
+				return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected an array/slice being used to retrieve keys, got %T", typ), mr.Severity, mr.Confidence), nil
 			}
 		} else {
 			return nil, fmt.Errorf("unable to get type of %#v", lhs0)
@@ -120,17 +133,63 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 
 		rhs0, ok := stmt.Rhs[0].(*ast.CallExpr)
 		if !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting only an append(), got: %#v", stmt.Rhs[0]), mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected only an append(), got: %#v", stmt.Rhs[0]), mr.Severity, mr.Confidence), nil
 		}
 		// The Right Hand Side should only contain the "append".
 		if name, ok := onlyAppendCall(rhs0); !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expecting only an append(), got: %#v", name), mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected only an append(), got: %#v", name), mr.Severity, mr.Confidence), nil
 		}
 		return nil, nil
 
 	default:
-		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("got %T; expecting exactly 1 statement (either append or delete) in a range with a map", stmt), mr.Severity, mr.Confidence), nil
+		return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("got %T; expected exactly 1 statement (either append or delete) in a range with a map", stmt), mr.Severity, mr.Confidence), nil
 	}
+}
+
+// isMapCopy returns true if:
+// * stmt is a statement that writes a value to a map
+// * the key used to write to the map is the same as rangeStmt.Key
+// * the value written to the map is rangeStmt.Value
+func isMapCopy(ctx *gosec.Context, stmt *ast.AssignStmt, rangeStmt *ast.RangeStmt) (bool, error) {
+	// Ensure that the lhs is a map.
+	if len(stmt.Lhs) != 1 {
+		return false, nil
+	}
+	lhs, ok := stmt.Lhs[0].(*ast.IndexExpr)
+	if !ok {
+		return false, nil
+	}
+	if typ := ctx.Info.TypeOf(lhs.X); typ != nil {
+		if _, ok := typ.Underlying().(*types.Map); !ok {
+			return false, nil
+		}
+	} else {
+		return false, fmt.Errorf("unable to get type of expr %#v", lhs.X)
+	}
+
+	// Ensure that the key from the range is used to write to the map.
+	lhsKey, ok := lhs.Index.(*ast.Ident)
+	if !ok {
+		return false, nil
+	}
+	rangeKey, ok := rangeStmt.Key.(*ast.Ident)
+	if !ok {
+		return false, nil
+	}
+	if ctx.Info.ObjectOf(lhsKey) != ctx.Info.ObjectOf(rangeKey) {
+		return false, nil
+	}
+
+	// Ensure that the value written is rangeStmt.Value.
+	rhsValue, ok := stmt.Rhs[0].(*ast.Ident)
+	if !ok {
+		return false, nil
+	}
+	rangeValue, ok := rangeStmt.Value.(*ast.Ident)
+	if !ok {
+		return false, nil
+	}
+	return ctx.Info.ObjectOf(rhsValue) == ctx.Info.ObjectOf(rangeValue), nil
 }
 
 func onlyAppendCall(callExpr *ast.CallExpr) (string, bool) {
