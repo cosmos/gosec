@@ -2508,6 +2508,13 @@ func main() {
 	for k := range do() {
 		{}
 	}
+
+	// Map copying should be permitted.
+	from := make(map[string]string, 0)
+	to := make(map[string]string, len(a))
+	for k, v := range from {
+		to[k] = v
+	}
 }
 
 func do() map[string]string { return nil }
