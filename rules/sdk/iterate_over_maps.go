@@ -15,8 +15,10 @@
 package sdk
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/types"
 
 	"github.com/informalsystems/gosec/v2"
@@ -114,7 +116,7 @@ func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, er
 	case *ast.AssignStmt:
 		lhs0, ok := stmt.Lhs[0].(*ast.Ident)
 		if !ok {
-			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), fmt.Sprintf("expected an identifier for an append call to a slice, got %T", stmt.Lhs[0]), mr.Severity, mr.Confidence), nil
+			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expected either an append, delete, or copy to another map in a range with a map", mr.Severity, mr.Confidence), nil
 		}
 		if lhs0.Obj == nil {
 			return gosec.NewIssue(ctx, rangeStmt, mr.ID(), "expected an array/slice being used to retrieve keys, got _", mr.Severity, mr.Confidence), nil
@@ -180,16 +182,47 @@ func isMapCopy(ctx *gosec.Context, stmt *ast.AssignStmt, rangeStmt *ast.RangeStm
 		return false, nil
 	}
 
-	// Ensure that the value written is rangeStmt.Value.
-	rhsValue, ok := stmt.Rhs[0].(*ast.Ident)
+	// If rangeStmt.Value if present, ensure it is being written to the destination map.
+	if rangeStmt.Value != nil {
+		rhsValue, ok := stmt.Rhs[0].(*ast.Ident)
+		if !ok {
+			return false, nil
+		}
+		rangeValue, ok := rangeStmt.Value.(*ast.Ident)
+		if !ok {
+			return false, nil
+		}
+		return ctx.Info.ObjectOf(rhsValue) == ctx.Info.ObjectOf(rangeValue), nil
+	}
+
+	// Otherwise, ensure that:
+	// 1. stmt.Rhs is an index expression and rangeStmt.Key is the index.
+	// 2. The map being read in stmt.Rhs is the the source map (rangeStmt.X).
+
+	// 1. Ensure that stmt.Rhs is an index expression and rangeStmt.Key is the index.
+	indexExpr, ok := stmt.Rhs[0].(*ast.IndexExpr)
 	if !ok {
 		return false, nil
 	}
-	rangeValue, ok := rangeStmt.Value.(*ast.Ident)
+	readKey, ok := indexExpr.Index.(*ast.Ident)
 	if !ok {
 		return false, nil
 	}
-	return ctx.Info.ObjectOf(rhsValue) == ctx.Info.ObjectOf(rangeValue), nil
+	if ctx.Info.ObjectOf(readKey) != ctx.Info.ObjectOf(rangeKey) {
+		return false, nil
+	}
+
+	// 2. Ensure that the map being read in stmt.Rhs is the same as the source map (rangeStmt.X).
+	rangeXString := &bytes.Buffer{}
+	printer.Fprint(rangeXString, ctx.FileSet, rangeStmt.X)
+	indexExprXString := &bytes.Buffer{}
+	printer.Fprint(indexExprXString, ctx.FileSet, indexExpr.X)
+
+	if bytes.Equal(rangeXString.Bytes(), indexExprXString.Bytes()) {
+		return true, nil
+	}
+	panic(fmt.Sprintf("asdfasdf: (%s) (%s)\n", rangeXString.String(), indexExprXString.String()))
+
 }
 
 func onlyAppendCall(callExpr *ast.CallExpr) (string, bool) {

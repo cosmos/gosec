@@ -2515,6 +2515,12 @@ func main() {
 	for k, v := range from {
 		to[k] = v
 	}
+	for k := range from {
+		to[k] = from[k]
+	}
+	for k := range do() {
+		to[k] = do()[k]
+	}
 }
 
 func do() map[string]string { return nil }
