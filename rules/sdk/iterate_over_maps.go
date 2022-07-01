@@ -217,12 +217,7 @@ func isMapCopy(ctx *gosec.Context, stmt *ast.AssignStmt, rangeStmt *ast.RangeStm
 	printer.Fprint(rangeXString, ctx.FileSet, rangeStmt.X)
 	indexExprXString := &bytes.Buffer{}
 	printer.Fprint(indexExprXString, ctx.FileSet, indexExpr.X)
-
-	if bytes.Equal(rangeXString.Bytes(), indexExprXString.Bytes()) {
-		return true, nil
-	}
-	panic(fmt.Sprintf("asdfasdf: (%s) (%s)\n", rangeXString.String(), indexExprXString.String()))
-
+	return bytes.Equal(rangeXString.Bytes(), indexExprXString.Bytes()), nil
 }
 
 func onlyAppendCall(callExpr *ast.CallExpr) (string, bool) {
