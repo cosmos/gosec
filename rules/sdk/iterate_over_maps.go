@@ -214,9 +214,15 @@ func isMapCopy(ctx *gosec.Context, stmt *ast.AssignStmt, rangeStmt *ast.RangeStm
 
 	// 2. Ensure that the map being read in stmt.Rhs is the same as the source map (rangeStmt.X).
 	rangeXString := &bytes.Buffer{}
-	printer.Fprint(rangeXString, ctx.FileSet, rangeStmt.X)
+	err := printer.Fprint(rangeXString, ctx.FileSet, rangeStmt.X)
+	if err != nil {
+		return false, err
+	}
 	indexExprXString := &bytes.Buffer{}
-	printer.Fprint(indexExprXString, ctx.FileSet, indexExpr.X)
+	err = printer.Fprint(indexExprXString, ctx.FileSet, indexExpr.X)
+	if err != nil {
+		return false, err
+	}
 	return bytes.Equal(rangeXString.Bytes(), indexExprXString.Bytes()), nil
 }
 
