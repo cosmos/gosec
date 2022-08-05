@@ -1,7 +1,7 @@
 GIT_TAG?= $(shell git describe --always --tags)
 BIN = gosec
 FMT_CMD = $(gofmt -s -l -w $(find . -type f -name '*.go' -not -path './vendor/*') | tee /dev/stderr)
-IMAGE_REPO = securego
+IMAGE_REPO = informalsystems
 BUILDFLAGS := '-w -s'
 CGO_ENABLED = 0
 GO := GO111MODULE=on go
