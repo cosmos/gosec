@@ -17,8 +17,8 @@ package rules
 import (
 	"sort"
 
-	"github.com/informalsystems/gosec/v2"
-	"github.com/informalsystems/gosec/v2/rules/sdk"
+	"github.com/cosmos/gosec/v2"
+	"github.com/cosmos/gosec/v2/rules/sdk"
 )
 
 // RuleDefinition contains the description of a rule and a mechanism to

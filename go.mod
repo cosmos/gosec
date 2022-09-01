@@ -1,6 +1,6 @@
 go 1.17
 
-module github.com/informalsystems/gosec/v2
+module github.com/cosmos/gosec/v2
 
 require (
 	github.com/gookit/color v1.3.1

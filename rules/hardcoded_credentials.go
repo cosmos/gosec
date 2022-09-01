@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/informalsystems/gosec/v2"
+	"github.com/cosmos/gosec/v2"
 	zxcvbn "github.com/nbutton23/zxcvbn-go"
 )
 

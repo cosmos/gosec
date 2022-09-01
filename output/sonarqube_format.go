@@ -1,6 +1,6 @@
 package output
 
-import "github.com/informalsystems/gosec/v2"
+import "github.com/cosmos/gosec/v2"
 
 type textRange struct {
 	StartLine   int `json:"startLine"`

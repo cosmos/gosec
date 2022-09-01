@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/informalsystems/gosec/v2"
+	"github.com/cosmos/gosec/v2"
 	"golang.org/x/tools/go/packages"
 )
 
