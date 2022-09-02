@@ -1,6 +1,6 @@
 package testutils
 
-import "github.com/informalsystems/gosec/v2"
+import "github.com/cosmos/gosec/v2"
 
 // CodeSample encapsulates a snippet of source code that compiles, and how many errors should be detected
 type CodeSample struct {

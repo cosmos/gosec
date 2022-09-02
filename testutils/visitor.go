@@ -3,7 +3,7 @@ package testutils
 import (
 	"go/ast"
 
-	"github.com/informalsystems/gosec/v2"
+	"github.com/cosmos/gosec/v2"
 )
 
 // MockVisitor is useful for stubbing out ast.Visitor with callback

@@ -21,7 +21,7 @@ import (
 	"go/printer"
 	"go/types"
 
-	"github.com/informalsystems/gosec/v2"
+	"github.com/cosmos/gosec/v2"
 )
 
 // This pass enforces ONLY key retrieval from maps. It resolves a problem that was

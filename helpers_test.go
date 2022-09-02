@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/informalsystems/gosec/v2"
-	"github.com/informalsystems/gosec/v2/testutils"
+	"github.com/cosmos/gosec/v2"
+	"github.com/cosmos/gosec/v2/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
