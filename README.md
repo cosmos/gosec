@@ -25,7 +25,6 @@ You may obtain a copy of the License [here](http://www.apache.org/licenses/LICEN
 [![Docs](https://readthedocs.org/projects/docs/badge/?version=latest)](https://securego.io/)
 [![Downloads](https://img.shields.io/github/downloads/cosmos/gosec/total.svg)](https://github.com/cosmos/gosec/releases)
 [![Docker Pulls](https://img.shields.io/docker/pulls/cosmos/gosec.svg)](https://hub.docker.com/r/cosmos/gosec/tags)
-[![Slack](http://securego.herokuapp.com/badge.svg)](http://securego.herokuapp.com)
 
 ## Install
 

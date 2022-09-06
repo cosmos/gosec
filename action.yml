@@ -1,6 +1,6 @@
-name: 'Gosec Security Checker'
+name: 'Cosmos Gosec Security Checker'
 description: 'Runs the gosec security checker'
-author: '@ccojocar'
+author: 'Cosmos Ecosystem'
 
 inputs:
   args:
@@ -10,7 +10,7 @@ inputs:
 
 runs:
     using: 'docker'
-    image: 'docker://securego/gosec'
+    image: 'docker://ghcr.io/cosmos/gosec'
     args:
       - ${{ inputs.args }}
 
