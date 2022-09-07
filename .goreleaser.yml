@@ -3,7 +3,7 @@ project_name: gosec
 
 release:
   github:
-    owner: securego
+    owner: cosmos
     name: gosec
 
 builds:
