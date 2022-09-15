@@ -22,12 +22,17 @@ type sarifProperties struct {
 }
 
 type sarifRule struct {
-	ID               string           `json:"id"`
-	Name             string           `json:"name"`
-	ShortDescription *sarifMessage    `json:"shortDescription"`
-	FullDescription  *sarifMessage    `json:"fullDescription"`
-	Help             *sarifMessage    `json:"help"`
-	Properties       *sarifProperties `json:"properties"`
+	ID                   string              `json:"id"`
+	Name                 string              `json:"name"`
+	ShortDescription     *sarifMessage       `json:"shortDescription"`
+	FullDescription      *sarifMessage       `json:"fullDescription"`
+	Help                 *sarifMessage       `json:"help"`
+	Properties           *sarifProperties    `json:"properties"`
+	DefaultConfiguration *sarifConfiguration `json:"defaultConfiguration"`
+}
+
+type sarifConfiguration struct {
+	Level sarifLevel `json:"level"`
 }
 
 type sarifArtifactLocation struct {
@@ -36,6 +41,7 @@ type sarifArtifactLocation struct {
 
 type sarifRegion struct {
 	StartLine   uint64 `json:"startLine"`
+	EndLine     uint64 `json:"endLine"`
 	StartColumn uint64 `json:"startColumn"`
 	EndColumn   uint64 `json:"endColumn"`
 }
@@ -63,6 +69,7 @@ type sarifResult struct {
 
 type sarifDriver struct {
 	Name           string       `json:"name"`
+	Version        string       `json:"version"`
 	InformationURI string       `json:"informationUri"`
 	Rules          []*sarifRule `json:"rules,omitempty"`
 }
@@ -86,7 +93,7 @@ type sarifReport struct {
 func buildSarifReport() *sarifReport {
 	return &sarifReport{
 		Version: "2.1.0",
-		Schema:  "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.4.json",
+		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
 		Runs:    []*sarifRun{},
 	}
 }
@@ -108,6 +115,9 @@ func buildSarifRule(issue *gosec.Issue) *sarifRule {
 		Properties: &sarifProperties{
 			Tags: []string{fmt.Sprintf("CWE-%s", issue.Cwe.ID), issue.Severity.String()},
 		},
+		DefaultConfiguration: &sarifConfiguration{
+			Level: getSarifLevel(issue.Severity.String()),
+		},
 	}
 }
 
@@ -115,10 +125,19 @@ func buildSarifRule(issue *gosec.Issue) *sarifRule {
 func buildSarifLocation(issue *gosec.Issue, rootPaths []string) (*sarifLocation, error) {
 	var filePath string
 
-	line, err := strconv.ParseUint(issue.Line, 10, 64)
+	lines := strings.Split(issue.Line, "-")
+	startLine, err := strconv.ParseUint(lines[0], 10, 64)
 	if err != nil {
 		return nil, err
 	}
+	endLine := startLine
+	if len(lines) > 1 {
+		endLine, err = strconv.ParseUint(lines[1], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	col, err := strconv.ParseUint(issue.Col, 10, 64)
 	if err != nil {
 		return nil, err
@@ -136,7 +155,8 @@ func buildSarifLocation(issue *gosec.Issue, rootPaths []string) (*sarifLocation,
 				URI: filePath,
 			},
 			Region: &sarifRegion{
-				StartLine:   line,
+				StartLine:   startLine,
+				EndLine:     endLine,
 				StartColumn: col,
 				EndColumn:   col,
 			},
@@ -144,4 +164,21 @@ func buildSarifLocation(issue *gosec.Issue, rootPaths []string) (*sarifLocation,
 	}
 
 	return location, nil
+}
+
+// From https://docs.oasis-open.org/sarif/sarif/v2.0/csprd02/sarif-v2.0-csprd02.html#_Toc10127839
+// * "warning": The rule specified by ruleId was evaluated and a problem was found.
+// * "error": The rule specified by ruleId was evaluated and a serious problem was found.
+// * "note": The rule specified by ruleId was evaluated and a minor problem or an opportunity to improve the code was found.
+func getSarifLevel(s string) sarifLevel {
+	switch s {
+	case "LOW":
+		return sarifWarning
+	case "MEDIUM":
+		return sarifError
+	case "HIGH":
+		return sarifError
+	default:
+		return sarifNote
+	}
 }
