@@ -165,6 +165,21 @@ var reGeneratedGoFile = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.`
 // of the files in fullPaths for the presence of generated Go headers to avoid
 // reporting on generated code, per https://github.com/cosmos/gosec/issues/30
 func filterOutGeneratedGoFiles(fullPaths []string) (filtered []string) {
+	if len(fullPaths) == 0 {
+		return nil
+	}
+
+	if len(fullPaths) == 1 {
+		blob, err := os.ReadFile(fullPaths[0])
+		if err != nil {
+			panic(err)
+		}
+		if !reGeneratedGoFile.Match(blob) {
+			filtered = append(filtered, fullPaths[0])
+		}
+		return
+	}
+
 	// position stores the order "pos" which will later be
 	// used to sort the paths to maintain original order
 	// despite the concurrent filtering that'll take place.
@@ -248,9 +263,9 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		}
 	}
 
-	// step 1/4 create build context.
+	// step 1/3: create build context.
 	buildD := build.Default
-	// step 2/4: add build tags to get env dependent files into basePackage.
+	// step 2/3: add build tags to get env dependent files into basePackage.
 	buildD.BuildTags = conf.BuildFlags
 	buildD.Dir = absGoModPath
 	basePackage, err := buildD.ImportDir(abspath, build.ImportComment)
@@ -276,12 +291,7 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		}
 	}
 
-	// step 3/4: now filter out generated go files as we definitely don't
-	// want to report on generated code, which is out of our direct control.
-	// Please see: https://github.com/cosmos/gosec/issues/30
-	packageFiles = filterOutGeneratedGoFiles(packageFiles)
-
-	// step 4/4: remove build tags from conf to proceed build correctly.
+	// step 3/3: remove build tags from conf to proceed build correctly.
 	conf.BuildFlags = nil
 	conf.Dir = absGoModPath
 	pkgs, err := packages.Load(conf, packageFiles...)
@@ -294,6 +304,7 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 // Check runs analysis on the given package
 func (gosec *Analyzer) Check(pkg *packages.Package) {
 	gosec.logger.Println("Checking package:", pkg.Name)
+
 	for _, file := range pkg.Syntax {
 		checkedFile := pkg.Fset.File(file.Pos()).Name()
 		// Skip the no-Go file from analysis (e.g. a Cgo files is expanded in 3 different files
@@ -312,7 +323,13 @@ func (gosec *Analyzer) Check(pkg *packages.Package) {
 		gosec.context.Imports = NewImportTracker()
 		gosec.context.Imports.TrackFile(file)
 		gosec.context.PassedValues = make(map[string]interface{})
-		ast.Walk(gosec, file)
+
+		// Only walk non-generated Go files as we definitely don't
+		// want to report on generated code, which is out of our direct control.
+		// Please see: https://github.com/cosmos/gosec/issues/30
+		if filtered := filterOutGeneratedGoFiles([]string{checkedFile}); len(filtered) > 0 {
+			ast.Walk(gosec, file)
+		}
 		gosec.stats.NumFiles++
 		gosec.stats.NumLines += pkg.Fset.File(file.Pos()).LineCount()
 	}
