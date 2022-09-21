@@ -26,8 +26,10 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime" // #nosec
 	"sort"
 	"strconv"
+	"sync"
 
 	"strings"
 
@@ -157,6 +159,69 @@ func (gosec *Analyzer) Process(buildTags []string, packagePaths ...string) error
 	return nil
 }
 
+var reGeneratedGoFile = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.`)
+
+// filterOutGeneratedGoFiles parallelizes the proocess of checking the contents
+// of the files in fullPaths for the presence of generated Go headers to avoid
+// reporting on generated code, per https://github.com/cosmos/gosec/issues/30
+func filterOutGeneratedGoFiles(fullPaths []string) (filtered []string) {
+	// position stores the order "pos" which will later be
+	// used to sort the paths to maintain original order
+	// despite the concurrent filtering that'll take place.
+	type position struct {
+		pos      int
+		fullPath string
+	}
+
+	posCh := make(chan *position, 10)
+	go func() {
+		defer close(posCh)
+		for i, fullPath := range fullPaths {
+			posCh <- &position{pos: i, fullPath: fullPath}
+		}
+	}()
+
+	filteredCh := make(chan *position, 10)
+	var wg sync.WaitGroup
+	// Spin up NumCPU goroutines that'll each open up a file
+	// for as long as there is one to be read on posCh.
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for pi := range posCh {
+				blob, err := os.ReadFile(pi.fullPath)
+				if err != nil {
+					panic(err)
+				}
+				if !reGeneratedGoFile.Match(blob) {
+					filteredCh <- pi
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(filteredCh)
+	}()
+
+	ordered := make([]*position, 0, len(fullPaths))
+	for nonGeneratedGoFilePath := range filteredCh {
+		ordered = append(ordered, nonGeneratedGoFilePath)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		oi, oj := ordered[i], ordered[j]
+		return oi.pos < oj.pos
+	})
+
+	filtered = make([]string, 0, len(ordered))
+	for _, oi := range ordered {
+		filtered = append(filtered, oi.fullPath)
+	}
+	return filtered
+}
+
 func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.Package, error) {
 	abspath, err := GetPkgAbsPath(pkgPath)
 	if err != nil {
@@ -183,9 +248,9 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		}
 	}
 
-	// step 1/3 create build context.
+	// step 1/4 create build context.
 	buildD := build.Default
-	// step 2/3: add build tags to get env dependent files into basePackage.
+	// step 2/4: add build tags to get env dependent files into basePackage.
 	buildD.BuildTags = conf.BuildFlags
 	buildD.Dir = absGoModPath
 	basePackage, err := buildD.ImportDir(abspath, build.ImportComment)
@@ -197,6 +262,7 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 	for _, filename := range basePackage.GoFiles {
 		packageFiles = append(packageFiles, path.Join(abspath, filename))
 	}
+
 	for _, filename := range basePackage.CgoFiles {
 		packageFiles = append(packageFiles, path.Join(abspath, filename))
 	}
@@ -210,7 +276,12 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 		}
 	}
 
-	// step 3/3 remove build tags from conf to proceed build correctly.
+	// step 3/4: now filter out generated go files as we definitely don't
+	// want to report on generated code, which is out of our direct control.
+	// Please see: https://github.com/cosmos/gosec/issues/30
+	packageFiles = filterOutGeneratedGoFiles(packageFiles)
+
+	// step 4/4: remove build tags from conf to proceed build correctly.
 	conf.BuildFlags = nil
 	conf.Dir = absGoModPath
 	pkgs, err := packages.Load(conf, packageFiles...)
