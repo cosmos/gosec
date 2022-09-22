@@ -47,7 +47,7 @@ func (c CallList) Add(selector, ident string) {
 }
 
 // Contains returns true if the package and function are
-/// members of this call list.
+// / members of this call list.
 func (c CallList) Contains(selector, ident string) bool {
 	if idents, ok := c[selector]; ok {
 		_, found := idents[ident]

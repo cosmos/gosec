@@ -35,8 +35,8 @@ import (
 // initialization only imports.
 //
 // Usage:
-// 	node, matched := MatchCallByPackage(n, ctx, "math/rand", "Read")
 //
+//	node, matched := MatchCallByPackage(n, ctx, "math/rand", "Read")
 func MatchCallByPackage(n ast.Node, c *Context, pkg string, names ...string) (*ast.CallExpr, bool) {
 	importedName, found := GetImportedName(pkg, c)
 	if !found {
@@ -304,7 +304,7 @@ func Gopath() []string {
 }
 
 // Getenv returns the values of the environment variable, otherwise
-//returns the default if variable is not set
+// returns the default if variable is not set
 func Getenv(key, userDefault string) string {
 	if val := os.Getenv(key); val != "" {
 		return val

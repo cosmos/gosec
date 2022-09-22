@@ -31,8 +31,8 @@ func TestUnitFilterOutGeneratedGoFiles(t *testing.T) {
 	filtered := filterOutGeneratedGoFiles(goFiles)
 	want := []string{
 		"testdata/without_generated_header.go",
-                "testdata/with_cgo_import_no_generated_code.go",
-                "testdata/with_regular_code_comment_about_generated.go",
+		"testdata/with_cgo_import_no_generated_code.go",
+		"testdata/with_regular_code_comment_about_generated.go",
 	}
 	if diff := cmp.Diff(filtered, want); diff != "" {
 		t.Fatalf("Result mismatch: got - want +\n%s", diff)
