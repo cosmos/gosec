@@ -36,8 +36,25 @@ func (r *blocklistedImport) ID() string {
 	return r.MetaData.ID
 }
 
+// forbiddenFromBlockedImports returns true if the package isn't allowed to import blocklisted/unsafe
+// packages; there are some packages though that we should allow unsafe imports given that they
+// critically need randomness for example cryptographic code, testing and simulation packages.
+// Please see https://github.com/cosmos/gosec/issues/44.
+func forbiddenFromBlockedImports(ctx *gosec.Context) bool {
+	switch pkg := ctx.Pkg.Name(); pkg {
+	case "codegen", "crypto", "secp256k1", "simapp", "simulation", "testutil":
+		// These packages rely on imports of "unsafe", "crypto/rand", "math/rand"
+		// for their core functionality like randomization e.g. in simulation or get
+		// data for randomizing data.
+		return false
+	default:
+		// Everything else is forbidden from unsafe imports.
+		return true
+	}
+}
+
 func (r *blocklistedImport) Match(n ast.Node, c *gosec.Context) (*gosec.Issue, error) {
-	if node, ok := n.(*ast.ImportSpec); ok {
+	if node, ok := n.(*ast.ImportSpec); ok && forbiddenFromBlockedImports(c) {
 		if description, ok := r.Blocklisted[unquote(node.Path.Value)]; ok {
 			return gosec.NewIssue(c, node, r.ID(), description, r.Severity, r.Confidence), nil
 		}
