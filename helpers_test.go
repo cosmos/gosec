@@ -9,7 +9,7 @@ import (
 
 	"github.com/cosmos/gosec/v2"
 	"github.com/cosmos/gosec/v2/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

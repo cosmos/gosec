@@ -12,7 +12,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/cosmos/gosec/v2/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

@@ -3,6 +3,7 @@ package gosec
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -34,6 +35,8 @@ func TestUnitFilterOutGeneratedGoFiles(t *testing.T) {
 		"testdata/with_cgo_import_no_generated_code.go",
 		"testdata/with_regular_code_comment_about_generated.go",
 	}
+	sort.Strings(filtered)
+	sort.Strings(want)
 	if diff := cmp.Diff(filtered, want); diff != "" {
 		t.Fatalf("Result mismatch: got - want +\n%s", diff)
 	}
