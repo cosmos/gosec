@@ -37,7 +37,24 @@ func (mr *mapRanging) ID() string {
 	return mr.MetaData.ID
 }
 
+// There are some packages that inherently need map ranging such as "testutil"
+// so return true if we detect such.
+func pkgExcusedFromMapRangingChecks(ctx *gosec.Context) bool {
+	switch pkg := ctx.Pkg.Name(); pkg {
+	case "gogoreflection", "simapp", "simulation", "testutil":
+		return true
+	default:
+		return false
+	}
+}
+
 func (mr *mapRanging) Match(node ast.Node, ctx *gosec.Context) (*gosec.Issue, error) {
+	if pkgExcusedFromMapRangingChecks(ctx) {
+		// Do nothing for such packages like "testutil".
+		// Please see https://github.com/cosmos/gosec/issues/50
+		return nil, nil
+	}
+
 	rangeStmt, ok := node.(*ast.RangeStmt)
 	if !ok {
 		return nil, nil
