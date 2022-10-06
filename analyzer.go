@@ -301,6 +301,16 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 	return pkgs, nil
 }
 
+func underTestUtilDirOrPath(path string) bool {
+	splits := strings.Split(path, string(filepath.Separator))
+	for _, split := range splits {
+		if split == "testutil" {
+			return true
+		}
+	}
+	return false
+}
+
 // Check runs analysis on the given package
 func (gosec *Analyzer) Check(pkg *packages.Package) {
 	gosec.logger.Println("Checking package:", pkg.Name)
@@ -312,6 +322,13 @@ func (gosec *Analyzer) Check(pkg *packages.Package) {
 		if filepath.Ext(checkedFile) != ".go" {
 			continue
 		}
+
+		// Skip over analyzing files in */testutil/* as they are causing spurious failures yet don't return
+		// much value in vulnerability reports. Please see https://github.com/cosmos/gosec/issues/52
+		if underTestUtilDirOrPath(checkedFile) {
+			continue
+		}
+
 		gosec.logger.Println("Checking file:", checkedFile)
 		gosec.context.FileSet = pkg.Fset
 		gosec.context.Config = gosec.config
