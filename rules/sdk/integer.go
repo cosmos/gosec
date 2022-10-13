@@ -32,6 +32,15 @@ func (i *integerOverflowCheck) ID() string {
 	return i.MetaData.ID
 }
 
+func hasAnyPrefix(src string, prefixes ...string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(src, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // To catch integer type conversion, check if we ever
 // call functions `uintX(y)` or `intX(y)` for any X and y,
 // where y is not an int literal.
@@ -51,7 +60,15 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 			return nil, nil
 		}
 
-		intCast := strings.HasPrefix(fun.Name, "int") || strings.HasPrefix(fun.Name, "uint")
+		if len(n.Args) == 0 {
+			return nil, nil
+		}
+
+		arg := n.Args[0]
+		argType := ctx.Info.TypeOf(arg).Underlying()
+		destType := ctx.Info.TypeOf(fun).Underlying()
+
+		intCast := hasAnyPrefix(destType.String(), "int", "uint")
 		if !intCast {
 			return nil, nil
 		}
@@ -60,7 +77,6 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 		// n.Args[0] is of type ast.Expr. It's the arg to the type conversion.
 		// If the expression string is a constant integer, then ignore.
 		// TODO: check that the constant will actually fit and wont overflow?
-		arg := n.Args[0]
 		exprString := types.ExprString(arg)
 		intLiteral, err := strconv.Atoi(exprString)
 		if err == nil {
@@ -88,19 +104,26 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 				return gosec.NewIssue(ctx, n, i.ID(), i.What, i.Severity, i.Confidence), nil
 			}
 			return nil, nil
-
-		case *ast.SelectorExpr:
-			// If the argument is being cast to its underlying type, there's no risk.
-			if ctx.Info.TypeOf(arg).Underlying() == ctx.Info.TypeOf(fun) {
-				return nil, nil
-			}
 		}
 
-		// TODO: run the go type checker to determine the
-		// type of arg so we can check if the type
-		// conversion is reducing the bit-size and could overflow.
-		// If not, this will be a false positive for now ...
-		// See https://golang.org/pkg/go/types/#Config.Check
+		// If the argument is being cast to its underlying type, there's no risk.
+		if argType == destType {
+			return nil, nil
+		}
+
+		// Check if both are uint* values.
+		argIsUint := hasAnyPrefix(argType.String(), "uint")
+		if argIsUint && !canBothUintsOverflow(argType.String(), destType.String()) {
+			return nil, nil
+		}
+
+		// Check if both are int* values.
+		argIsInt := hasAnyPrefix(argType.String(), "int")
+		if argIsInt && !canBothIntToIntOverflow(argType.String(), destType.String()) {
+			return nil, nil
+		}
+
+		// ALl other cases should be flagged.
 		return gosec.NewIssue(ctx, n, i.ID(), i.What, i.Severity, i.Confidence), nil
 	}
 
@@ -190,4 +213,62 @@ func canLenOverflow32(destKind string) bool {
 	default:
 		return true
 	}
+}
+
+func canBothUintsOverflow(srcKind, destKind string) bool {
+	bothUints := hasAnyPrefix(srcKind, "uint") && hasAnyPrefix(destKind, "uint")
+	if !bothUints {
+		return true
+	}
+
+	if destKind == "uint" {
+		// Only in 32-bit is uint equal to uint32 hence can it overflow if src is uint64.
+		return srcKind == "uint64" && is32Bit
+	}
+	if destKind == "uint64" {
+		// Casting any uint type to uint64 cannot overflow.
+		return false
+	}
+	if destKind == "uint32" {
+		// Only uint64 or uint (when in 64-bits) can overflow when being cast to uint32.
+		return srcKind == "uint64" || (srcKind == "uint" && !is32Bit)
+	}
+	if destKind == "uint16" {
+		// Everything except "uint8" and "uint16" can overflow when cast to uint16.
+		return srcKind == "uint64" || srcKind == "uint32" || srcKind == "uint"
+	}
+	if destKind == "uint8" {
+		// Everything that isn't "uint8" will overflow when cast to uint8.
+		return srcKind != "uint8"
+	}
+	return true
+}
+
+func canBothIntToIntOverflow(srcKind, destKind string) bool {
+	bothInts := hasAnyPrefix(srcKind, "int") && hasAnyPrefix(destKind, "int")
+	if !bothInts {
+		return true
+	}
+
+	if destKind == "int" {
+		// Only in 32-bit is int equal to int32 hence can it overflow if src is int64.
+		return srcKind == "int64" && is32Bit
+	}
+	if destKind == "int64" {
+		// Casting any int type to int64 cannot overflow.
+		return false
+	}
+	if destKind == "int32" {
+		// Only int64 or int (when in 64-bits) can overflow when being cast to int32.
+		return srcKind == "int64" || (srcKind == "int" && !is32Bit)
+	}
+	if destKind == "int16" {
+		// Everything except "int8" and "int16" can overflow when cast to int16.
+		return srcKind == "int64" || srcKind == "int32" || srcKind == "int"
+	}
+	if destKind == "int8" {
+		// Everything that isn't "int8" will overflow when cast to int8.
+		return srcKind != "int8"
+	}
+	return true
 }
