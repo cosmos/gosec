@@ -72,9 +72,23 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 		switch arg := arg.(type) {
 		case *ast.CallExpr:
 			// len() returns an int that is always >= 0, so it will fit in a uint, uint64, or int64.
-			if argFun, ok := arg.Fun.(*ast.Ident); ok && argFun.Name == "len" && (fun.Name == "uint" || fun.Name == "uint64" || fun.Name == "int64") {
-				return nil, nil
+			argFun, ok := arg.Fun.(*ast.Ident)
+			if !ok || argFun.Name != "len" {
+				break
 			}
+
+			// Please see the rules for determining if *int*(len(...)) can overflow
+			// as per: https://github.com/cosmos/gosec/issues/54
+			lenCanOverflow := canLenOverflow64
+			if is32Bit {
+				lenCanOverflow = canLenOverflow32
+			}
+
+			if lenCanOverflow(fun.Name) {
+				return gosec.NewIssue(ctx, n, i.ID(), i.What, i.Severity, i.Confidence), nil
+			}
+			return nil, nil
+
 		case *ast.SelectorExpr:
 			// If the argument is being cast to its underlying type, there's no risk.
 			if ctx.Info.TypeOf(arg).Underlying() == ctx.Info.TypeOf(fun) {
@@ -103,4 +117,77 @@ func NewIntegerCast(id string, conf gosec.Config) (gosec.Rule, []ast.Node) {
 			What:       "Potential integer overflow by integer type conversion",
 		},
 	}, []ast.Node{(*ast.FuncDecl)(nil), (*ast.AssignStmt)(nil), (*ast.CallExpr)(nil)}
+}
+
+// Please see the rules at https://github.com/cosmos/gosec/issues/54
+func canLenOverflow64(destKind string) bool {
+	switch destKind {
+	case "int8", "uint8", "int16", "uint16":
+		return true
+
+	case "uint64":
+		// uint64([0, maxInt64])
+		return false
+
+	case "uint32":
+		// uint32([0, maxInt64])
+		return true
+
+	case "uint":
+		// uint => uint64 => uint64([0, maxInt64])
+		return false
+
+	case "int64":
+		// int64([0, maxInt64])
+		return false
+
+	case "int32":
+		// int32([0, maxInt64])
+		return true
+
+	case "int":
+		// int64([0, maxInt64])
+		return false
+
+	default:
+		return true
+	}
+}
+
+const s = 1
+const is32Bit = (^uint(s-1))>>32 == 0 // #nosec
+
+// Please see the rules at https://github.com/cosmos/gosec/issues/54
+func canLenOverflow32(destKind string) bool {
+	switch destKind {
+	case "int8", "uint8", "int16", "uint16":
+		return true
+
+	case "uint64":
+		// uint64([0, maxInt32])
+		return false
+
+	case "uint32":
+		// uint32([0, maxInt32])
+		return false
+
+	case "uint":
+		// uint => uint32 => uint32([0, maxInt32])
+		return false
+
+	case "int64":
+		// int64([0, maxInt32])
+		return false
+
+	case "int32":
+		// int32([0, maxInt32])
+		return false
+
+	case "int":
+		// int => int32 => int32([0, maxInt32])
+		return false
+
+	default:
+		return true
+	}
 }
