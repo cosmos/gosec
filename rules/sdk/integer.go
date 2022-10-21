@@ -65,9 +65,19 @@ func (i *integerOverflowCheck) Match(node ast.Node, ctx *gosec.Context) (*gosec.
 		}
 
 		arg := n.Args[0]
-		argType := ctx.Info.TypeOf(arg).Underlying()
-		destType := ctx.Info.TypeOf(fun).Underlying()
+		argT := ctx.Info.TypeOf(arg)
+		if argT == nil {
+			// TODO: Perhaps log and investigate this case more.
+			return nil, nil
+		}
+		fnType := ctx.Info.TypeOf(fun)
+		if fnType == nil {
+			// TODO: Perhaps log and investigate this case more.
+			return nil, nil
+		}
 
+		argType := argT.Underlying()
+		destType := fnType.Underlying()
 		intCast := hasAnyPrefix(destType.String(), "int", "uint")
 		if !intCast {
 			return nil, nil
