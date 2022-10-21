@@ -159,6 +159,21 @@ func (gosec *Analyzer) Process(buildTags []string, packagePaths ...string) error
 	return nil
 }
 
+const sep = os.PathSeparator
+
+var reTestsPath = regexp.MustCompile(fmt.Sprintf("(^\\s*tests%c?)|%c\\s*tests\\s*%c|%c\\s*tests\\s*$", sep, sep, sep, sep))
+
+func allowedFiles(fullPaths ...string) (filtered []string) {
+	for _, fullPath := range fullPaths {
+		// Skip over "/tests/" files as they are generating lots of noise.
+		// Please see https://github.com/cosmos/gosec/issues/60
+		if !reTestsPath.MatchString(fullPath) {
+			filtered = append(filtered, fullPath)
+		}
+	}
+	return filterOutGeneratedGoFiles(filtered)
+}
+
 var reGeneratedGoFile = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.`)
 
 // filterOutGeneratedGoFiles parallelizes the proocess of checking the contents
@@ -344,7 +359,7 @@ func (gosec *Analyzer) Check(pkg *packages.Package) {
 		// Only walk non-generated Go files as we definitely don't
 		// want to report on generated code, which is out of our direct control.
 		// Please see: https://github.com/cosmos/gosec/issues/30
-		if filtered := filterOutGeneratedGoFiles([]string{checkedFile}); len(filtered) > 0 {
+		if filtered := allowedFiles(checkedFile); len(filtered) > 0 {
 			ast.Walk(gosec, file)
 		}
 		gosec.stats.NumFiles++
