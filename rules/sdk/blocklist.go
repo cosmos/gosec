@@ -16,6 +16,7 @@ package sdk
 
 import (
 	"go/ast"
+	"path/filepath"
 	"strings"
 
 	"github.com/cosmos/gosec/v2"
@@ -48,6 +49,17 @@ func forbiddenFromBlockedImports(ctx *gosec.Context) bool {
 		// data for randomizing data.
 		return false
 	default:
+		pkgPath, err := gosec.GetPkgAbsPath(pkg)
+		if err != nil {
+			return true
+		}
+
+		splits := strings.Split(pkgPath, string(filepath.Separator))
+		for _, split := range splits {
+			if split == "crypto" {
+				return false
+			}
+		}
 		// Everything else is forbidden from unsafe imports.
 		return true
 	}
