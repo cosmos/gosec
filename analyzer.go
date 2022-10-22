@@ -73,6 +73,7 @@ type Metrics struct {
 // Analyzer object is the main object of gosec. It has methods traverse an AST
 // and invoke the correct checking rules as on each node as required.
 type Analyzer struct {
+	mu          sync.Mutex
 	ignoreNosec bool
 	ruleset     RuleSet
 	context     *Context
@@ -140,10 +141,77 @@ func (gosec *Analyzer) Process(buildTags []string, packagePaths ...string) error
 		Tests:      gosec.tests,
 	}
 
-	for _, pkgPath := range packagePaths {
-		pkgs, err := gosec.load(pkgPath, config)
+	// From CPU profiles, we have gosec.load spending a chunk of time:
+	// ROUTINE ======================== github.com/cosmos/gosec/v2.(*Analyzer).Process in cosmos/gosec/analyzer.go
+	// 0      3.91s (flat, cum) 14.92% of Total
+	// .          .    136:func (gosec *Analyzer) Process(buildTags []string, packagePaths ...string) error {
+	// .          .    137:	confi := &packages.Config{
+	// .          .    138:		Mode:       LoadMode,
+	// .          .    139:		BuildFlags: buildTags,
+	// .          .    140:		Tests:      gosec.tests,
+	// .          .    141:	}
+	// .          .    142:
+	// .          .    143:	for _, pkgPath := range packagePaths {
+	// .      3.46s    144:		pkgs, err := gosec.load(pkgPath, config)
+
+	type pkgPath struct {
+		i    int
+		path string
+	}
+	pkgPathsCh := make(chan *pkgPath, 10)
+	go func() {
+		defer close(pkgPathsCh)
+		for i, path := range packagePaths {
+			pkgPathsCh <- &pkgPath{
+				i:    i,
+				path: path,
+			}
+		}
+	}()
+
+	type pkgsErrI struct {
+		path string
+		pkgs []*packages.Package
+		err  error
+		i    int
+	}
+	resCh := make(chan *pkgsErrI, runtime.NumCPU()+2)
+
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for pkgi := range pkgPathsCh {
+				pkgs, err := gosec.load(pkgi.path, config)
+				resCh <- &pkgsErrI{
+					i:    pkgi.i,
+					path: pkgi.path,
+					pkgs: pkgs,
+					err:  err,
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(resCh)
+	}()
+
+	pkgsL := make([]*pkgsErrI, 0, 10)
+	for res := range resCh {
+		pkgsL = append(pkgsL, res)
+	}
+	sort.Slice(pkgsL, func(i, j int) bool {
+		pi, pj := pkgsL[i], pkgsL[j]
+		return pi.i < pj.i
+	})
+
+	for _, pki := range pkgsL {
+		pkgs, err := pki.pkgs, pki.err
 		if err != nil {
-			gosec.AppendError(pkgPath, err)
+			gosec.AppendError(pki.path, err)
 		}
 		for _, pkg := range pkgs {
 			if pkg.Name != "" {
@@ -255,11 +323,16 @@ func filterOutGeneratedGoFiles(fullPaths []string) (filtered []string) {
 func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.Package, error) {
 	abspath, err := GetPkgAbsPath(pkgPath)
 	if err != nil {
+		gosec.mu.Lock()
 		gosec.logger.Printf("Skipping: %s. Path doesn't exist.", abspath)
+		gosec.mu.Unlock()
+
 		return []*packages.Package{}, nil
 	}
 
+	gosec.mu.Lock()
 	gosec.logger.Println("Import directory:", abspath)
+	gosec.mu.Unlock()
 
 	// Find the deepest go.mod for the package, defaulting to the working directory.
 	absWorkingDir, err := GetPkgAbsPath(".")
@@ -281,7 +354,9 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 	// step 1/3: create build context.
 	buildD := build.Default
 	// step 2/3: add build tags to get env dependent files into basePackage.
+	gosec.mu.Lock()
 	buildD.BuildTags = conf.BuildFlags
+	gosec.mu.Unlock()
 	buildD.Dir = absGoModPath
 	basePackage, err := buildD.ImportDir(abspath, build.ImportComment)
 	if err != nil {
@@ -307,6 +382,9 @@ func (gosec *Analyzer) load(pkgPath string, conf *packages.Config) ([]*packages.
 	}
 
 	// step 3/3: remove build tags from conf to proceed build correctly.
+	gosec.mu.Lock()
+	defer gosec.mu.Unlock()
+
 	conf.BuildFlags = nil
 	conf.Dir = absGoModPath
 	pkgs, err := packages.Load(conf, packageFiles...)
