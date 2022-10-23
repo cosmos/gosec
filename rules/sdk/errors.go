@@ -55,32 +55,50 @@ func (r *noErrorCheck) Match(n ast.Node, ctx *gosec.Context) (*gosec.Issue, erro
 	switch stmt := n.(type) {
 	case *ast.AssignStmt:
 		for _, expr := range stmt.Rhs {
-			if callExpr, ok := expr.(*ast.CallExpr); ok {
-				pos := returnsError(callExpr, ctx)
-				if pos < 0 || pos >= len(stmt.Lhs) {
-					return nil, nil
-				}
-				id, ok := stmt.Lhs[pos].(*ast.Ident)
-				if !ok {
-					// don't think this should ever happen
-					return gosec.NewIssue(ctx, n, r.ID(), "PANIC!", r.Severity, r.Confidence), nil
-				} else if ok && id.Name == "_" {
-					// error is just ignored!
-					return gosec.NewIssue(ctx, n, r.ID(), r.What, r.Severity, r.Confidence), nil
-				}
-
-				// TODO: next line should check `id.Name != nil`,
-				// and the BlockStmt that follows should have a ReturnStmt
-				// that includes the id.Name
+			callExpr, ok := expr.(*ast.CallExpr)
+			if !ok {
+				continue
 			}
+
+			if allowedToNotReturnErr.ContainsCallExpr(callExpr, ctx) != nil {
+				continue
+			}
+
+			pos := returnsError(callExpr, ctx)
+			if pos < 0 || pos >= len(stmt.Lhs) {
+				return nil, nil
+			}
+			id, ok := stmt.Lhs[pos].(*ast.Ident)
+			if !ok {
+				// don't think this should ever happen
+				return gosec.NewIssue(ctx, n, r.ID(), "PANIC!", r.Severity, r.Confidence), nil
+			} else if ok && id.Name == "_" {
+				// error is just ignored!
+				return gosec.NewIssue(ctx, n, r.ID(), r.What, r.Severity, r.Confidence), nil
+			}
+
+			// TODO: next line should check `id.Name != nil`,
+			// and the BlockStmt that follows should have a ReturnStmt
+			// that includes the id.Name
 		}
 	}
 	return nil, nil
 }
 
+var allowedToNotReturnErr gosec.CallList
+
+func init() {
+	allowedToNotReturnErr = gosec.NewCallList()
+	allowedToNotReturnErr.AddAll("bytes.Buffer", "Write", "WriteByte", "WriteRune", "WriteString")
+	allowedToNotReturnErr.AddAll("fmt", "Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln")
+	allowedToNotReturnErr.AddAll("strings.Builder", "Write", "WriteByte", "WriteRune", "WriteString")
+	allowedToNotReturnErr.Add("io.PipeWriter", "CloseWithError")
+	allowedToNotReturnErr.Add("hash.Hash", "Write")
+	allowedToNotReturnErr.AddAll("github.com/spf13/pflag.FlagSet", "GetBool", "GetString", "GetUint32", "GetBool", "GetInt64", "GetUint64")
+}
+
 // NewErrorNotPropagated detects if a returned error is not propagated up the stack.
 func NewErrorNotPropagated(id string, conf gosec.Config) (gosec.Rule, []ast.Node) {
-
 	return &noErrorCheck{
 		MetaData: gosec.MetaData{
 			ID:         id,
