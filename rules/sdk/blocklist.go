@@ -43,7 +43,7 @@ func (r *blocklistedImport) ID() string {
 // Please see https://github.com/cosmos/gosec/issues/44.
 func forbiddenFromBlockedImports(ctx *gosec.Context) bool {
 	switch pkg := ctx.Pkg.Name(); pkg {
-	case "codegen", "crypto", "secp256k1", "simapp", "simulation", "testutil":
+	case "codegen", "crypto", "depinject", "secp256k1", "simapp", "simulation", "testutil":
 		// These packages rely on imports of "unsafe", "crypto/rand", "math/rand"
 		// for their core functionality like randomization e.g. in simulation or get
 		// data for randomizing data.
