@@ -41,7 +41,7 @@ func (mr *mapRanging) ID() string {
 // so return true if we detect such.
 func pkgExcusedFromMapRangingChecks(ctx *gosec.Context) bool {
 	switch pkg := ctx.Pkg.Name(); pkg {
-	case "gogoreflection", "simapp", "simulation", "testutil":
+	case "core", "gogoreflection", "proto", "runtime", "simapp", "simulation", "testutil":
 		return true
 	default:
 		return false
