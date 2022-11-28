@@ -2528,4 +2528,25 @@ func noop(keys []string) []string {return keys}
 `}, 13, gosec.NewConfig(),
 		},
 	}
+
+	// SampleCodeTimeNowNonConsensusAware is a sample in which we
+	// should flag the usage of time.Now() which can lead to chain halt.
+	SampleCodeTimeNowNonConsensusAware = []CodeSample{
+		{
+			[]string{`
+package main
+
+func main() {
+        _ = time.Now()
+}`}, 3, gosec.NewConfig(),
+		},
+		{
+			[]string{`
+package main
+
+func main() {
+        _ = time.Now().Unix()
+}`}, 3, gosec.NewConfig(),
+		},
+	}
 )
