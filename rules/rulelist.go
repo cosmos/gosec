@@ -116,7 +116,7 @@ func Generate(filters ...RuleFilter) RuleList {
 		{"G702", "Import blocklist for SDK modules", sdk.NewUnsafeImport},
 		{"G703", "Errors that don't result in rollback", sdk.NewErrorNotPropagated},
 		{"G704", "Strconv invalid bitSize and cast", sdk.NewStrconvIntBitSizeOverflow},
-		{"G705", "Iterating over maps undeterministically", sdk.NewMapRangingCheck},
+		// {"G705", "Iterating over maps undeterministically", sdk.NewMapRangingCheck}, // TODO refine this rule and make it less noisy
 	}
 
 	ruleMap := make(map[string]RuleDefinition)
