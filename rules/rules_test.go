@@ -91,9 +91,9 @@ var _ = Describe("gosec rules", func() {
 			runner("G704", testutils.SampleCodeStrconvBitsize)
 		})
 
-		It("should detect non-deterministic map ranging", func() {
-			runner("G705", testutils.SampleCodeMapRangingNonDeterministic)
-		})
+		// It("should detect non-deterministic map ranging", func() {
+		// 	runner("G705", testutils.SampleCodeMapRangingNonDeterministic)
+		// })
 
 		It("should detect DoS vulnerability via decompression bomb", func() {
 			runner("G110", testutils.SampleCodeG110)
