@@ -188,5 +188,4 @@ var _ = Describe("gosec rules", func() {
 		})
 
 	})
-
 })
