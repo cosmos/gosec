@@ -12,6 +12,8 @@ jobs:
       matrix:
         go_version:
           - '1.17'
+          - '1.18'
+          - '1.19'
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on
